@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>apfel-gui</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.arthurficial.apfel-gui</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>apfel-gui needs microphone access for voice input (speech-to-text).</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>apfel-gui needs speech recognition access for voice input.</string>
+</dict>
+</plist>
