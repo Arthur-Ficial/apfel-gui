@@ -1,8 +1,8 @@
-# apfel-gui — Project Instructions
+# apfel-gui - Project Instructions
 
 ## Purpose
 
-Native macOS SwiftUI debug GUI for [apfel](https://github.com/Arthur-Ficial/apfel). Pure HTTP consumer — no model logic, no FoundationModels dependency.
+Native macOS SwiftUI debug GUI for [apfel](https://github.com/Arthur-Ficial/apfel). Pure HTTP consumer - no model logic, no FoundationModels dependency.
 
 ## Build & Run
 
@@ -45,5 +45,5 @@ main.swift → startGUI()
 ## Notes
 
 - `ContextStrategy` enum is duplicated from ApfelCore (13 lines) to keep this repo independent
-- No external Swift package dependencies — only system frameworks
+- No external Swift package dependencies - only system frameworks
 - `Info.plist` must include `NSMicrophoneUsageDescription` for STT to work

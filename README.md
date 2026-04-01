@@ -1,6 +1,6 @@
 # apfel-gui
 
-Native macOS debug GUI for [apfel](https://github.com/Arthur-Ficial/apfel) — Apple Intelligence from the command line.
+Native macOS debug GUI for [apfel](https://github.com/Arthur-Ficial/apfel) - Apple Intelligence from the command line.
 
 ![apfel GUI Debug Inspector](screenshots/gui-chat.png)
 
@@ -15,13 +15,13 @@ A SwiftUI desktop app that talks to `apfel --serve` via HTTP. It provides:
 - **Speech-to-text** and **text-to-speech** (on-device)
 - **Self-discussion mode** where the model debates itself
 
-All inference runs **on-device** via apfel's server. This app contains no model logic — it's a pure HTTP consumer.
+All inference runs **on-device** via apfel's server. This app contains no model logic - it's a pure HTTP consumer.
 
 ## Requirements
 
 - **macOS 26+** (Tahoe) with Apple Intelligence enabled
 - **Apple Silicon** (M1 or later)
-- **[apfel](https://github.com/Arthur-Ficial/apfel) must be installed** — apfel-gui needs it to run the server
+- **[apfel](https://github.com/Arthur-Ficial/apfel) must be installed** - apfel-gui needs it to run the server
 
 ## Install
 
@@ -72,4 +72,4 @@ Quitting the app automatically stops the server.
 
 ## Related
 
-- [apfel](https://github.com/Arthur-Ficial/apfel) — CLI + OpenAI-compatible server for Apple's on-device LLM
+- [apfel](https://github.com/Arthur-Ficial/apfel) - CLI + OpenAI-compatible server for Apple's on-device LLM
