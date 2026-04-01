@@ -17,32 +17,58 @@ A SwiftUI desktop app that talks to `apfel --serve` via HTTP. It provides:
 
 All inference runs **on-device** via apfel's server. This app contains no model logic — it's a pure HTTP consumer.
 
-## Prerequisites
+## Requirements
 
 - **macOS 26+** (Tahoe) with Apple Intelligence enabled
-- **apfel** installed and in PATH: `brew install Arthur-Ficial/tap/apfel`
+- **Apple Silicon** (M1 or later)
+- **[apfel](https://github.com/Arthur-Ficial/apfel) must be installed** — apfel-gui needs it to run the server
 
-## Build & Install
+## Install
+
+### Step 1: Install apfel (the server)
 
 ```bash
-# Build
+brew tap Arthur-Ficial/tap
+brew install apfel
+```
+
+Verify it works:
+
+```bash
+apfel --version        # should print apfel v0.6.x
+apfel --model-info     # check Apple Intelligence is enabled
+```
+
+> **No apfel, no GUI.** apfel-gui launches `apfel --serve` as a background process. If `apfel` is not in your PATH, the GUI will not start.
+
+### Step 2: Install apfel-gui
+
+```bash
+git clone https://github.com/Arthur-Ficial/apfel-gui.git
+cd apfel-gui
+make install           # builds + installs to /usr/local/bin
+```
+
+Or build without installing:
+
+```bash
 swift build -c release
-
-# Install to /usr/local/bin
-make install
-
-# Or just run directly
 swift run apfel-gui
 ```
 
-## How it works
+### Step 3: Run
 
-1. `apfel-gui` finds `apfel` in your PATH
-2. Spawns `apfel --serve --port 11434 --cors` as a background process
-3. Waits for the server health check to pass
-4. Opens the SwiftUI window
-5. All chat goes through `http://localhost:11434/v1/chat/completions`
-6. Quitting the app terminates the server
+```bash
+apfel-gui
+```
+
+That's it. The GUI will:
+1. Find `apfel` in your PATH
+2. Start `apfel --serve --port 11434 --cors` in the background
+3. Wait for the server health check
+4. Open the SwiftUI window
+
+Quitting the app automatically stops the server.
 
 ## Related
 
