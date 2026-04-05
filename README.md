@@ -6,31 +6,30 @@ Native macOS debug GUI for [apfel](https://github.com/Arthur-Ficial/apfel) - App
 
 ## What is this?
 
-A SwiftUI desktop app that talks to `apfel --serve` via HTTP. Built as a **pro debugging tool** that shows everything — raw requests, raw responses, server-side event traces, token budgets, and full SSE streams. Nothing hidden.
+A SwiftUI desktop app that talks to `apfel --serve` via HTTP. Built as a **pro debugging tool** that shows everything: raw requests, raw responses, full MCP JSON-RPC protocol data, server-side event traces, token budgets, and SSE streams. Nothing hidden, nothing dumbed down.
 
 ### Features
 
 - **Chat interface** with streaming responses
-- **Debug inspector** — raw request/response JSON, token breakdown (prompt + completion), finish reason, curl commands
-- **Server-side event trace** — matched by request ID, shows context building, chunk deltas, tool detection, and finish events from the server perspective
+- **Debug inspector** with raw request/response JSON, token breakdown (prompt + completion), finish reason, curl commands
+- **Full MCP debugging** with raw JSON-RPC request and response for every tool call, auto-discovered MCP servers, configurable via settings
+- **Server-side event trace** matched by request ID: context building, chunk deltas, MCP tool execution, finish events
 - **Request log** with live stats (uptime, requests/min, error rate, total tokens, active requests)
-- **Server status bar** — version, context window, model availability, active parameter badges
-- **Model settings** — temperature, max tokens, seed, JSON response mode
-- **Context settings** — 5 trimming strategies (newest-first, oldest-first, sliding-window, summarize, strict)
-- **MCP debugging** — auto-discovers and loads MCP tool servers (bundled debug-tools + apfel's calculator), configurable via MCP settings, full tool call visibility in debug panel and server logs
-- **Tool calling display** — shows tool_calls in messages and debug panel with function names, arguments, finish reasons
-- **Typed error handling** — content policy violations, context overflow, rate limiting with specific recovery guidance
+- **Server status bar** showing version, context window, model availability, MCP server count, active parameter badges
+- **Model settings** for temperature, max tokens, seed, JSON response mode
+- **Context settings** with 5 trimming strategies (newest-first, oldest-first, sliding-window, summarize, strict)
+- **Typed error handling** for content policy violations, context overflow, rate limiting with recovery guidance
 - **Speech-to-text** and **text-to-speech** (on-device)
-- **Self-discussion mode** — model debates itself with dual perspectives and language support
-- **Configurable connection** — works with any OpenAI-compatible server (advanced setting, hidden by default)
+- **Self-discussion mode** where the model debates itself with dual perspectives and language support
+- **Configurable connection** to any OpenAI-compatible server (advanced setting)
 
-All inference runs **on-device** via apfel's server. This app contains no model logic — it's a pure HTTP consumer.
+All inference runs **on-device** via apfel's server. This app contains no model logic. It is a pure HTTP consumer.
 
 ## Requirements
 
 - **macOS 26+** (Tahoe) with Apple Intelligence enabled
 - **Apple Silicon** (M1 or later)
-- **[apfel](https://github.com/Arthur-Ficial/apfel) v0.7.7+** must be installed
+- **[apfel](https://github.com/Arthur-Ficial/apfel) v0.8.1+** must be installed
 
 ## Install
 
@@ -44,7 +43,7 @@ brew install apfel
 Verify it works:
 
 ```bash
-apfel --version        # should print apfel v0.7.7+
+apfel --version        # should print apfel v0.8.1+
 apfel --model-info     # check Apple Intelligence is enabled
 ```
 
@@ -55,7 +54,7 @@ apfel --model-info     # check Apple Intelligence is enabled
 ```bash
 git clone https://github.com/Arthur-Ficial/apfel-gui.git
 cd apfel-gui
-make install           # builds + installs to /usr/local/bin
+make install           # builds + installs to /usr/local/bin + MCP server
 ```
 
 Or build without installing:
@@ -74,9 +73,9 @@ apfel-gui
 That's it. The GUI will:
 1. Find `apfel` in your PATH
 2. Auto-discover MCP servers (bundled debug-tools + apfel's calculator if found)
-3. Start `apfel --serve --port 11434 --cors --debug --mcp <servers>` in the background
+3. Start `apfel --serve --port 11438 --cors --debug --mcp <servers>` in the background
 4. Fetch server info from `/health` and `/v1/models`
-4. Open the SwiftUI window
+5. Open the SwiftUI window
 
 Quitting the app automatically stops the server.
 
@@ -95,30 +94,48 @@ Quitting the app automatically stops the server.
 
 The debug inspector is the heart of apfel-gui. Select any message to see:
 
-- **Token breakdown** — prompt tokens, completion tokens, total, with budget bar
-- **Finish reason** — stop, tool_calls, length, content_filter (color-coded)
-- **Server trace** — the actual events from the server: request decoding, context building, chunk deltas, tool detection, finish reason
-- **curl command** — copy and paste to reproduce the exact request
-- **Request JSON** — what was sent to the server
-- **Response JSON** — raw SSE events, exactly as received
-- **Tool calls** — function name and arguments for each tool call
-- **Error type** — structured error classification with recovery guidance
+- **Token breakdown** with prompt tokens, completion tokens, total, and context budget bar
+- **Finish reason** color-coded: stop, tool_calls, length, content_filter
+- **MCP Request** as full JSON-RPC `tools/call` with method, name, and arguments
+- **MCP Response** as full JSON-RPC result with content text and isError flag
+- **MCP Events** showing auto-execution status and finish reason
+- **Server trace** with the actual events from the server: request decoding, context building, chunk deltas, MCP tool execution, finish reason
+- **curl command** to reproduce the exact request
+- **Request JSON** showing what was sent to the server
+- **Response JSON** with raw SSE events exactly as received
+- **Error type** with structured error classification and recovery guidance
 
 ## MCP Tool Debugging
 
-apfel-gui launches `apfel --serve` with `--mcp` flags, enabling MCP tool servers automatically. apfel handles all MCP logic (tool injection, tool call detection) — the GUI is a thin debugging layer that shows exactly what happens.
+apfel-gui launches `apfel --serve` with `--mcp` flags. apfel handles all MCP logic: tool discovery, injection into chat completions, tool call detection, auto-execution via JSON-RPC, and re-prompting with results. The GUI shows the full raw protocol data.
 
 **Default servers (auto-discovered):**
-- **debug-tools** (bundled) — `echo`, `timestamp`, `system_info` tools for testing
-- **calculator** (from apfel) — `add`, `subtract`, `multiply`, `divide`, `sqrt`, `power`, `round_number`
+- **debug-tools** (bundled) with `debug_echo`, `timestamp`, `system_info` tools
+- **calculator** (from apfel repo, if found) with `add`, `subtract`, `multiply`, `divide`, `sqrt`, `power`, `round_number`
 
-**What you see in the debug panel:**
-- Tool calls with function names and arguments
-- `finish_reason: "tool_calls"` indicator
-- Server-side events showing `"tool_calls detected: multiply, echo"`
-- Full SSE stream with tool call chunks
+**What the debug panel shows for each MCP tool call:**
+```
+MCP Request (JSON-RPC tools/call)
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "multiply",
+    "arguments": { "a": 247, "b": 83 }
+  }
+}
 
-**Adding custom MCP servers:** Open MCP settings (toolbar) → Add path to any MCP server script (.py) or executable → Restart apfel-gui.
+MCP Response (JSON-RPC result)
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "content": [{ "type": "text", "text": "20501" }],
+    "isError": false
+  }
+}
+```
+
+**Adding custom MCP servers:** Open MCP settings (toolbar) and add a path to any MCP server (.py script or executable). Changes require restarting apfel-gui.
 
 ## API Compatibility
 
@@ -128,11 +145,13 @@ apfel-gui uses the OpenAI-compatible API exposed by `apfel --serve`:
 |----------|---------|
 | `GET /health` | Server status, version, context window, model availability |
 | `GET /v1/models` | Model capabilities, supported/unsupported parameters |
-| `POST /v1/chat/completions` | Chat (streaming + non-streaming) |
-| `GET /v1/logs` | Request log with events (requires `--debug`) |
+| `POST /v1/chat/completions` | Chat (streaming + non-streaming) with MCP tool auto-execution |
+| `GET /v1/logs` | Request log with MCP events (requires `--debug`) |
 | `GET /v1/logs/stats` | Aggregate stats |
 
-The connection can be pointed to any OpenAI-compatible server via Model Settings → Connection (Advanced).
+The GUI uses port 11438 by default (different from apfel's default 11434) to avoid collisions.
+
+The connection can be pointed to any OpenAI-compatible server via Model Settings and Connection (Advanced).
 
 ## Related
 
