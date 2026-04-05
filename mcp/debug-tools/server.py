@@ -21,12 +21,12 @@ SERVER_VERSION = "1.0.0"
 
 TOOLS = [
     {
-        "name": "echo",
-        "description": "Returns the input text unchanged. Use for testing tool call round-trips.",
+        "name": "debug_echo",
+        "description": "Debug-only: returns input text unchanged. Only use when the user explicitly says 'echo' or 'debug echo'. Never use for normal conversation.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "text": {"type": "string", "description": "Text to echo back"}
+                "text": {"type": "string", "description": "Text to echo back verbatim"}
             },
             "required": ["text"]
         }
@@ -52,10 +52,9 @@ TOOLS = [
 
 def execute(name, args):
     """Execute a tool by name."""
-    if name == "echo":
+    if name == "debug_echo":
         text = args.get("text", "")
         if not text:
-            # Tolerate model sending text under different keys
             for v in args.values():
                 if isinstance(v, str):
                     text = v
