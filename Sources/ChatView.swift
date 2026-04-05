@@ -127,7 +127,7 @@ struct ChatView: View {
                         .foregroundColor(viewModel.speakEnabled ? .accentColor : .gray)
                 }
                 .buttonStyle(.borderless)
-                .help(viewModel.speakEnabled ? "Speech on — click to mute" : "Speech off — click to enable")
+                .help(viewModel.speakEnabled ? "Speech on - click to mute" : "Speech off - click to enable")
                 .onHover { h in if h { NSCursor.pointingHand.push() } else { NSCursor.pop() } }
 
                 // Microphone button

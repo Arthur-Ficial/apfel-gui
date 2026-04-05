@@ -216,7 +216,7 @@ class GUIAppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "apfel — Apple Intelligence"
+        window.title = "apfel - Apple Intelligence"
         window.center()
         window.contentView = NSHostingView(rootView: contentView)
         window.makeKeyAndOrderFront(nil)
