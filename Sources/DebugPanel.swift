@@ -162,77 +162,52 @@ struct DebugPanel: View {
                             }
                         }
 
-                        // MCP Tool Execution (parsed from server events)
+                        // MCP Tool Execution - Full JSON-RPC request/response
                         if let events = msg.serverEvents {
-                            let mcpEvents = events.filter { $0.hasPrefix("mcp ") || $0.hasPrefix("mcp:") }
-                            if !mcpEvents.isEmpty {
+                            let mcpToolEvents = events.filter { $0.hasPrefix("mcp tool:") }
+                            let mcpOtherEvents = events.filter { ($0.hasPrefix("mcp ") || $0.hasPrefix("mcp:")) && !$0.hasPrefix("mcp tool:") }
+                            if !mcpToolEvents.isEmpty {
+                                // Show full JSON-RPC for each tool call
+                                ForEach(Array(mcpToolEvents.enumerated()), id: \.offset) { _, event in
+                                    let detail = String(event.dropFirst(10)) // drop "mcp tool: "
+                                    let parsed = parseMCPToolEvent(detail)
+
+                                    // MCP JSON-RPC Request
+                                    codeSection(
+                                        title: "MCP Request (JSON-RPC tools/call)",
+                                        icon: "arrow.up.doc.fill",
+                                        text: parsed.requestJSON,
+                                        color: .purple
+                                    )
+
+                                    // MCP JSON-RPC Response
+                                    codeSection(
+                                        title: "MCP Response (JSON-RPC result)",
+                                        icon: "arrow.down.doc.fill",
+                                        text: parsed.responseJSON,
+                                        color: .green
+                                    )
+                                }
+                            }
+                            if !mcpOtherEvents.isEmpty {
                                 infoCard {
-                                    VStack(alignment: .leading, spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 4) {
                                         HStack {
                                             Image(systemName: "wrench.and.screwdriver")
                                                 .foregroundStyle(.purple)
-                                            Text("MCP Tool Execution")
+                                            Text("MCP Events")
                                                 .font(.caption.bold())
                                             Spacer()
                                         }
-                                        ForEach(Array(mcpEvents.enumerated()), id: \.offset) { _, event in
-                                            if event.hasPrefix("mcp tool:") {
-                                                // Parse "mcp tool: multiply({"a": 247, "b": 83}) = 20501"
-                                                let detail = String(event.dropFirst(10)) // drop "mcp tool: "
-                                                if let eqIdx = detail.range(of: ") = ") {
-                                                    let call = String(detail[detail.startIndex...eqIdx.lowerBound])
-                                                    let result = String(detail[eqIdx.upperBound...])
-                                                    VStack(alignment: .leading, spacing: 4) {
-                                                        HStack {
-                                                            Text("Call")
-                                                                .font(.system(.caption2, design: .monospaced))
-                                                                .foregroundStyle(.secondary)
-                                                            Spacer()
-                                                            CopyButton(text: call)
-                                                        }
-                                                        Text(call)
-                                                            .font(.system(.caption, design: .monospaced))
-                                                            .fontWeight(.medium)
-                                                            .foregroundStyle(.purple)
-                                                            .textSelection(.enabled)
-                                                            .padding(6)
-                                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                                            .background(Color.purple.opacity(0.05))
-                                                            .clipShape(RoundedRectangle(cornerRadius: 4))
-
-                                                        HStack {
-                                                            Text("Result")
-                                                                .font(.system(.caption2, design: .monospaced))
-                                                                .foregroundStyle(.secondary)
-                                                            Spacer()
-                                                            CopyButton(text: result)
-                                                        }
-                                                        Text(result)
-                                                            .font(.system(.caption, design: .monospaced))
-                                                            .fontWeight(.semibold)
-                                                            .foregroundStyle(.green)
-                                                            .textSelection(.enabled)
-                                                            .padding(6)
-                                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                                            .background(Color.green.opacity(0.05))
-                                                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                                                    }
-                                                } else {
-                                                    Text(detail)
-                                                        .font(.system(.caption2, design: .monospaced))
-                                                        .textSelection(.enabled)
-                                                }
-                                            } else {
-                                                // Other mcp events: "mcp: auto-executed...", "mcp sse finish_reason=..."
-                                                HStack(spacing: 4) {
-                                                    Circle()
-                                                        .fill(Color.purple.opacity(0.6))
-                                                        .frame(width: 5, height: 5)
-                                                    Text(event)
-                                                        .font(.system(.caption2, design: .monospaced))
-                                                        .foregroundStyle(.secondary)
-                                                        .textSelection(.enabled)
-                                                }
+                                        ForEach(Array(mcpOtherEvents.enumerated()), id: \.offset) { _, event in
+                                            HStack(spacing: 4) {
+                                                Circle()
+                                                    .fill(Color.purple.opacity(0.6))
+                                                    .frame(width: 5, height: 5)
+                                                Text(event)
+                                                    .font(.system(.caption2, design: .monospaced))
+                                                    .foregroundStyle(.secondary)
+                                                    .textSelection(.enabled)
                                             }
                                         }
                                     }
@@ -334,6 +309,70 @@ struct DebugPanel: View {
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    // MARK: - MCP JSON-RPC Reconstruction
+
+    private struct MCPToolParsed {
+        let requestJSON: String
+        let responseJSON: String
+    }
+
+    /// Reconstruct full JSON-RPC request/response from server event string.
+    /// Input: "multiply({"a": 247, "b": 83}) = 20501"
+    private func parseMCPToolEvent(_ detail: String) -> MCPToolParsed {
+        // Parse: "functionName(arguments) = result"
+        guard let parenIdx = detail.firstIndex(of: "("),
+              let eqRange = detail.range(of: ") = ") else {
+            return MCPToolParsed(
+                requestJSON: "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"tools/call\",\n  \"params\": \"\(detail)\"\n}",
+                responseJSON: "{}"
+            )
+        }
+
+        let name = String(detail[detail.startIndex..<parenIdx])
+        let argsStart = detail.index(after: parenIdx)
+        let argsRaw = String(detail[argsStart..<eqRange.lowerBound])
+        let result = String(detail[eqRange.upperBound...])
+
+        // Pretty-print the arguments JSON
+        let prettyArgs: String
+        if let data = argsRaw.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data),
+           let pretty = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+           let str = String(data: pretty, encoding: .utf8) {
+            prettyArgs = str
+        } else {
+            prettyArgs = argsRaw
+        }
+
+        let requestJSON = """
+        {
+          "jsonrpc": "2.0",
+          "method": "tools/call",
+          "params": {
+            "name": "\(name)",
+            "arguments": \(prettyArgs)
+          }
+        }
+        """
+
+        let responseJSON = """
+        {
+          "jsonrpc": "2.0",
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "\(result.replacingOccurrences(of: "\"", with: "\\\""))"
+              }
+            ],
+            "isError": false
+          }
+        }
+        """
+
+        return MCPToolParsed(requestJSON: requestJSON, responseJSON: responseJSON)
     }
 
     // MARK: - Components
