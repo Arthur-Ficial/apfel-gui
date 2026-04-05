@@ -204,17 +204,18 @@ struct ChatView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Spacer()
-            Image(systemName: "apple.logo")
-                .font(.system(size: 36))
-                .foregroundStyle(.quaternary)
-            Text("Apple Intelligence")
-                .font(.title3)
-                .fontWeight(.medium)
+            Text("apfel")
+                .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundStyle(.secondary)
             if !viewModel.serverVersion.isEmpty {
-                Text("apfel v\(viewModel.serverVersion) · \(viewModel.contextWindow)t context")
+                Text("v\(viewModel.serverVersion) · \(viewModel.contextWindow)t context")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
+            }
+            if !viewModel.mcpServerPaths.isEmpty {
+                Text("\(viewModel.mcpServerPaths.count) MCP servers active")
+                    .font(.caption)
+                    .foregroundStyle(.purple.opacity(0.7))
             }
             Text("Press Enter to send")
                 .font(.caption)
