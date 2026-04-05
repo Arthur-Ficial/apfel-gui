@@ -29,42 +29,17 @@ All inference runs **on-device** via apfel's server. This app contains no model 
 
 - **macOS 26+** (Tahoe) with Apple Intelligence enabled
 - **Apple Silicon** (M1 or later)
-- **[apfel](https://github.com/Arthur-Ficial/apfel) v0.8.1+** must be installed
 
 ## Install
 
-### Step 1: Install apfel (the server)
-
 ```bash
 brew tap Arthur-Ficial/tap
-brew install apfel
+brew install apfel-gui
 ```
 
-Verify it works:
+This installs both apfel-gui and [apfel](https://github.com/Arthur-Ficial/apfel) (the server) automatically.
 
-```bash
-apfel --version        # should print apfel v0.8.1+
-apfel --model-info     # check Apple Intelligence is enabled
-```
-
-> **No apfel, no GUI.** apfel-gui launches `apfel --serve` as a background process. If `apfel` is not in your PATH, the GUI will not start.
-
-### Step 2: Install apfel-gui
-
-```bash
-git clone https://github.com/Arthur-Ficial/apfel-gui.git
-cd apfel-gui
-make install           # builds + installs to /usr/local/bin + MCP server
-```
-
-Or build without installing:
-
-```bash
-swift build -c release
-swift run apfel-gui
-```
-
-### Step 3: Run
+## Run
 
 ```bash
 apfel-gui
@@ -78,6 +53,14 @@ That's it. The GUI will:
 5. Open the SwiftUI window
 
 Quitting the app automatically stops the server.
+
+### Build from source
+
+```bash
+git clone https://github.com/Arthur-Ficial/apfel-gui.git
+cd apfel-gui
+make install
+```
 
 ## Keyboard Shortcuts
 

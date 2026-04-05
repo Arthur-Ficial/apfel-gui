@@ -2,17 +2,29 @@
 
 ## Purpose
 
-Native macOS SwiftUI debug GUI for [apfel](https://github.com/Arthur-Ficial/apfel). Pure HTTP consumer - no model logic, no FoundationModels dependency. Works with apfel v0.7.7+.
+Native macOS SwiftUI debug GUI for [apfel](https://github.com/Arthur-Ficial/apfel). Pure HTTP consumer - no model logic, no FoundationModels dependency. Works with apfel v0.8.1+.
 
-## Build & Run
+## Install & Run
+
+```bash
+brew tap Arthur-Ficial/tap
+brew install apfel-gui          # installs apfel-gui + apfel
+apfel-gui                       # run
+```
+
+## Build from source
 
 ```bash
 swift build -c release          # build
-make install                    # build + install to /usr/local/bin
+make install                    # build + install to /usr/local/bin + MCP server
 swift run apfel-gui             # run debug build
 ```
 
-Requires `apfel` installed and in PATH.
+## Release
+
+```bash
+./scripts/release.sh 1.1.0      # build, package, GitHub release, update Homebrew formula
+```
 
 ## Architecture
 
