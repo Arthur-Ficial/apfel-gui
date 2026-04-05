@@ -474,12 +474,18 @@ final class APIClient: @unchecked Sendable {
         return response.data
     }
 
-    /// Find a log entry by request ID. Searches recent logs for both the request and stream entries.
+    /// Find the log entry for a request. Tries exact ID match first, then falls back to
+    /// the most recent entry with matching characteristics (MCP auto-execute creates new IDs).
     func fetchLogEntry(requestId: String) async -> LogEntry? {
-        guard let entries = try? await fetchLogs(limit: 50) else { return nil }
-        // Server logs streaming requests with both "chatcmpl-xxx" and "chatcmpl-xxx-stream" IDs
-        return entries.first(where: { $0.id == requestId + "-stream" })
-            ?? entries.first(where: { $0.id == requestId })
+        guard let entries = try? await fetchLogs(limit: 20) else { return nil }
+        // Exact match (v0.7.x format)
+        if let match = entries.first(where: { $0.id == requestId + "-stream" })
+            ?? entries.first(where: { $0.id == requestId }) {
+            return match
+        }
+        // MCP auto-execute creates a new internal request with a different ID.
+        // Fall back to the most recent completed stream entry.
+        return entries.first(where: { $0.stream && $0.status == 200 })
     }
 
     // MARK: - Stats

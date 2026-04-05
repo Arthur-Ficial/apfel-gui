@@ -209,10 +209,18 @@ class ChatViewModel {
             }
 
             // Fetch server-side events for this request (async, non-blocking)
+            // Small delay to let the server finish writing the stream log entry
             if let reqId = requestId {
                 Task {
+                    try? await Task.sleep(for: .milliseconds(500))
                     if let logEntry = await apiClient.fetchLogEntry(requestId: reqId) {
                         updateMessage(id: assistantId) { $0.serverEvents = logEntry.events }
+                    } else {
+                        // Retry once after another delay
+                        try? await Task.sleep(for: .seconds(1))
+                        if let logEntry = await apiClient.fetchLogEntry(requestId: reqId) {
+                            updateMessage(id: assistantId) { $0.serverEvents = logEntry.events }
+                        }
                     }
                 }
             }

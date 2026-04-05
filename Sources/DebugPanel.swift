@@ -162,6 +162,84 @@ struct DebugPanel: View {
                             }
                         }
 
+                        // MCP Tool Execution (parsed from server events)
+                        if let events = msg.serverEvents {
+                            let mcpEvents = events.filter { $0.hasPrefix("mcp ") || $0.hasPrefix("mcp:") }
+                            if !mcpEvents.isEmpty {
+                                infoCard {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        HStack {
+                                            Image(systemName: "wrench.and.screwdriver")
+                                                .foregroundStyle(.purple)
+                                            Text("MCP Tool Execution")
+                                                .font(.caption.bold())
+                                            Spacer()
+                                        }
+                                        ForEach(Array(mcpEvents.enumerated()), id: \.offset) { _, event in
+                                            if event.hasPrefix("mcp tool:") {
+                                                // Parse "mcp tool: multiply({"a": 247, "b": 83}) = 20501"
+                                                let detail = String(event.dropFirst(10)) // drop "mcp tool: "
+                                                if let eqIdx = detail.range(of: ") = ") {
+                                                    let call = String(detail[detail.startIndex...eqIdx.lowerBound])
+                                                    let result = String(detail[eqIdx.upperBound...])
+                                                    VStack(alignment: .leading, spacing: 4) {
+                                                        HStack {
+                                                            Text("Call")
+                                                                .font(.system(.caption2, design: .monospaced))
+                                                                .foregroundStyle(.secondary)
+                                                            Spacer()
+                                                            CopyButton(text: call)
+                                                        }
+                                                        Text(call)
+                                                            .font(.system(.caption, design: .monospaced))
+                                                            .fontWeight(.medium)
+                                                            .foregroundStyle(.purple)
+                                                            .textSelection(.enabled)
+                                                            .padding(6)
+                                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                                            .background(Color.purple.opacity(0.05))
+                                                            .clipShape(RoundedRectangle(cornerRadius: 4))
+
+                                                        HStack {
+                                                            Text("Result")
+                                                                .font(.system(.caption2, design: .monospaced))
+                                                                .foregroundStyle(.secondary)
+                                                            Spacer()
+                                                            CopyButton(text: result)
+                                                        }
+                                                        Text(result)
+                                                            .font(.system(.caption, design: .monospaced))
+                                                            .fontWeight(.semibold)
+                                                            .foregroundStyle(.green)
+                                                            .textSelection(.enabled)
+                                                            .padding(6)
+                                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                                            .background(Color.green.opacity(0.05))
+                                                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                                                    }
+                                                } else {
+                                                    Text(detail)
+                                                        .font(.system(.caption2, design: .monospaced))
+                                                        .textSelection(.enabled)
+                                                }
+                                            } else {
+                                                // Other mcp events: "mcp: auto-executed...", "mcp sse finish_reason=..."
+                                                HStack(spacing: 4) {
+                                                    Circle()
+                                                        .fill(Color.purple.opacity(0.6))
+                                                        .frame(width: 5, height: 5)
+                                                    Text(event)
+                                                        .font(.system(.caption2, design: .monospaced))
+                                                        .foregroundStyle(.secondary)
+                                                        .textSelection(.enabled)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // Server-side event trace
                         if let events = msg.serverEvents, !events.isEmpty {
                             infoCard {
