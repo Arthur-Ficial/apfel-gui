@@ -58,7 +58,7 @@ struct ChatView: View {
                                         viewModel.showDebugPanel = true
                                     },
                                     onSpeak: msg.role == "assistant" ? {
-                                        viewModel.tts.speak(msg.content, languageCode: viewModel.speechLanguage)
+                                        viewModel.tts.speak(msg.content, languageCode: viewModel.speechLanguage, voiceId: viewModel.selectedVoiceId)
                                     } : nil
                                 )
                                 .id(msg.id)
@@ -129,16 +129,6 @@ struct ChatView: View {
                 .buttonStyle(.borderless)
                 .help(viewModel.speakEnabled ? "Speech on - click to mute" : "Speech off - click to enable")
                 .onHover { h in if h { NSCursor.pointingHand.push() } else { NSCursor.pop() } }
-
-                if viewModel.speakEnabled {
-                    Picker("", selection: $viewModel.speechLanguage) {
-                        ForEach(TTSManager.preferredVoices) { voice in
-                            Text(voice.languageCode).tag(voice.languageCode)
-                        }
-                    }
-                    .frame(width: 65)
-                    .help("TTS voice language")
-                }
 
                 // Microphone button
                 Button(action: { viewModel.toggleListening() }) {

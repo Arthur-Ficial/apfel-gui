@@ -44,10 +44,13 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, Observable {
     }
 
     /// Speak text aloud. Stops any current speech first.
-    func speak(_ text: String, languageCode: String = "en-GB", voiceVariant: Int = 0) {
+    /// If voiceId is provided, uses that exact voice. Otherwise picks the best available.
+    func speak(_ text: String, languageCode: String = "en-GB", voiceVariant: Int = 0, voiceId: String? = nil) {
         synthesizer.stopSpeaking(at: .immediate)
         let utterance = AVSpeechUtterance(string: text)
-        if let voice = bestVoice(for: languageCode, variant: voiceVariant) {
+        if let id = voiceId, let voice = AVSpeechSynthesisVoice(identifier: id) {
+            utterance.voice = voice
+        } else if let voice = bestVoice(for: languageCode, variant: voiceVariant) {
             utterance.voice = voice
         }
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate

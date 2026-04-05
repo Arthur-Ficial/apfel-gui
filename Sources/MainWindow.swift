@@ -50,20 +50,11 @@ struct MainWindow: View {
 
                 Divider()
 
-                Button(action: { viewModel.showModelSettings = true }) {
-                    Label("Model", systemImage: "slider.horizontal.3")
+                Button(action: { viewModel.showSettings = true }) {
+                    Label("Settings", systemImage: "gearshape")
                 }
-                .help("Model settings (temperature, max tokens, seed)")
-
-                Button(action: { viewModel.showMCPSettings = true }) {
-                    Label("MCP", systemImage: "wrench.and.screwdriver")
-                }
-                .help("MCP tool server settings")
-
-                Button(action: { viewModel.showContextSettings = true }) {
-                    Label("Context", systemImage: "gearshape")
-                }
-                .help("Context management settings")
+                .keyboardShortcut(",", modifiers: .command)
+                .help("Settings (Cmd+,)")
 
                 Toggle(isOn: $viewModel.showDebugPanel) {
                     Label("Debug", systemImage: "ant.circle")
@@ -82,14 +73,8 @@ struct MainWindow: View {
         .sheet(isPresented: $viewModel.showSelfDiscussion) {
             SelfDiscussionView(viewModel: viewModel)
         }
-        .sheet(isPresented: $viewModel.showContextSettings) {
-            ContextSettingsView(viewModel: viewModel)
-        }
-        .sheet(isPresented: $viewModel.showModelSettings) {
-            ModelSettingsView(viewModel: viewModel)
-        }
-        .sheet(isPresented: $viewModel.showMCPSettings) {
-            MCPSettingsView(viewModel: viewModel)
+        .sheet(isPresented: $viewModel.showSettings) {
+            SettingsView(viewModel: viewModel)
         }
     }
 }

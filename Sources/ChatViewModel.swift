@@ -63,6 +63,8 @@ class ChatViewModel {
 
     // Speech settings
     var speechLanguage: String = "en-GB"
+    var selectedVoiceId: String? = nil
+    var showSettings: Bool = false
 
     // Server info (fetched on startup)
     var serverVersion: String = ""
@@ -246,7 +248,7 @@ class ChatViewModel {
             // Speak the response if TTS is enabled
             if speakEnabled, let content = messages.first(where: { $0.id == assistantId })?.content,
                !content.isEmpty, !content.hasPrefix("Error:"), !content.hasPrefix("[Tool Call:") {
-                tts.speak(content, languageCode: speechLanguage)
+                tts.speak(content, languageCode: speechLanguage, voiceId: selectedVoiceId)
             }
 
             // Refresh server info (active requests count)
