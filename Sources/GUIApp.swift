@@ -9,7 +9,7 @@ import SwiftUI
 /// Start the GUI: launch server in background, open SwiftUI chat window.
 @MainActor
 func startGUI() {
-    let port = 11434
+    let port = 11435  // Different from apfel's default (11434) to avoid collisions
 
     // Find apfel in PATH or fall back to /usr/local/bin/apfel
     let apfelPath: String

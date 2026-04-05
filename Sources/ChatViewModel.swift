@@ -143,7 +143,7 @@ class ChatViewModel {
         )
 
         // Build curl command for debug
-        let port = 11434
+        let port = apiClient.baseURL.port ?? 11435
         let curlCmd = buildCurlCommand(requestJSON: requestJSON, port: port)
 
         // Add user message (with request JSON attached)
