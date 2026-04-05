@@ -11,7 +11,7 @@ let apfelGUIPort = 11438
 
 /// Start the GUI: launch server in background, open SwiftUI chat window.
 @MainActor
-func startGUI() {
+func startGUI(enableAPI: Bool = false) {
     let port = apfelGUIPort
 
     // Find apfel in PATH or fall back to /usr/local/bin/apfel
@@ -76,7 +76,8 @@ func startGUI() {
         serverProcess: serverProcess,
         apiClient: client,
         mcpPaths: mcpPaths,
-        serverLaunchCommand: launchCommand
+        serverLaunchCommand: launchCommand,
+        enableAPI: enableAPI
     )
     app.delegate = delegate
     app.run()
@@ -201,17 +202,18 @@ class GUIAppDelegate: NSObject, NSApplicationDelegate {
     let apiClient: APIClient
     let mcpPaths: [String]
     let serverLaunchCommand: String
+    let enableAPI: Bool
     var window: NSWindow?
     var viewModel: ChatViewModel?
+    var controlServer: GUIControlServer?
 
-    init(serverProcess: Process, apiClient: APIClient, mcpPaths: [String], serverLaunchCommand: String) {
+    init(serverProcess: Process, apiClient: APIClient, mcpPaths: [String], serverLaunchCommand: String, enableAPI: Bool) {
         self.serverProcess = serverProcess
         self.apiClient = apiClient
         self.mcpPaths = mcpPaths
         self.serverLaunchCommand = serverLaunchCommand
+        self.enableAPI = enableAPI
     }
-
-    var controlServer: GUIControlServer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let viewModel = ChatViewModel(apiClient: apiClient)
@@ -219,10 +221,12 @@ class GUIAppDelegate: NSObject, NSApplicationDelegate {
         viewModel.serverLaunchCommand = serverLaunchCommand
         self.viewModel = viewModel
 
-        // Start GUI control API for programmatic testing
-        let ctrl = GUIControlServer(viewModel: viewModel)
-        ctrl.start()
-        self.controlServer = ctrl
+        // Start GUI control API if --api flag was passed
+        if enableAPI {
+            let ctrl = GUIControlServer(viewModel: viewModel)
+            ctrl.start()
+            self.controlServer = ctrl
+        }
         let contentView = MainWindow(viewModel: viewModel, apiClient: apiClient)
         NSApp.mainMenu = buildMainMenu()
 

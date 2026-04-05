@@ -115,6 +115,54 @@ Uses the OpenAI-compatible API from `apfel --serve` on port 11438:
 | `GET /v1/logs` | Request log with events |
 | `GET /v1/logs/stats` | Aggregate stats |
 
+## AI Control Mode
+
+Start with `--api` to enable full programmatic control via HTTP on port 11439:
+
+```bash
+apfel-gui --api
+```
+
+Every GUI action is controllable. No clicking needed.
+
+```bash
+# Send a message and get the response
+curl localhost:11439/send -d '{"message": "What is 99 times 42?"}'
+
+# Change settings
+curl localhost:11439/settings -d '{"temperature": 0.7, "voice_id": "com.apple.voice.premium.en-US.Ava"}'
+
+# Get full debug info for a message
+curl localhost:11439/inspect -d '{"index": -1}'
+
+# List all installed voices
+curl localhost:11439/voices
+
+# Speak text with a specific voice
+curl localhost:11439/speak -d '{"text": "Hello", "voice_id": "com.apple.voice.premium.en-US.Ava"}'
+```
+
+**All endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | Help with all endpoints |
+| GET | `/state` | Full app state |
+| GET | `/messages` | All messages with metadata, tokens, events, tool calls |
+| GET | `/debug` | Debug inspector for selected message |
+| GET | `/settings` | Current settings |
+| GET | `/voices` | All installed TTS voices with quality levels |
+| POST | `/send` | Send message: `{"message": "text"}` |
+| POST | `/clear` | Clear chat |
+| POST | `/system-prompt` | Set system prompt: `{"prompt": "text"}` |
+| POST | `/settings` | Update settings: `{"temperature": 0.7, ...}` |
+| POST | `/speak` | Speak text: `{"text": "...", "voice_id": "..."}` |
+| POST | `/stop-speaking` | Stop TTS |
+| POST | `/toggle-debug` | Toggle debug panel |
+| POST | `/toggle-logs` | Toggle log viewer |
+| POST | `/inspect` | Inspect message: `{"index": 0}` or `{"id": "..."}` |
+| POST | `/self-discuss` | Start self-discussion: `{"topic": "...", "turns": 3}` |
+
 ## Related
 
 - [apfel](https://github.com/Arthur-Ficial/apfel) - Apple Intelligence from the command line
