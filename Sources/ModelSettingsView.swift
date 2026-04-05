@@ -151,7 +151,7 @@ struct ModelSettingsView: View {
                     HStack {
                         Text("Port:")
                             .frame(width: 50, alignment: .trailing)
-                        TextField("11438", text: $customPort)
+                        TextField("\(apfelGUIPort)", text: $customPort)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(.caption, design: .monospaced))
                             .frame(width: 80)
@@ -214,7 +214,7 @@ struct ModelSettingsView: View {
             // Load current connection
             let url = viewModel.apiClient.baseURL
             customHost = url.host() ?? "127.0.0.1"
-            customPort = url.port.map(String.init) ?? "11438"
+            customPort = url.port.map(String.init) ?? "\(apfelGUIPort)"
             customModel = viewModel.apiClient.modelName
         }
     }
@@ -239,7 +239,7 @@ struct ModelSettingsView: View {
 
     private func applyConnection() {
         let host = customHost.isEmpty ? "127.0.0.1" : customHost
-        let port = customPort.isEmpty ? "11438" : customPort
+        let port = customPort.isEmpty ? "\(apfelGUIPort)" : customPort
         let model = customModel.isEmpty ? "apple-foundationmodel" : customModel
 
         if let url = URL(string: "http://\(host):\(port)") {

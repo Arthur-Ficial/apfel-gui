@@ -6,10 +6,13 @@
 import AppKit
 import SwiftUI
 
+/// Port for the GUI's own apfel server instance. Avoids apfel defaults (11434/11435).
+let apfelGUIPort = 11438
+
 /// Start the GUI: launch server in background, open SwiftUI chat window.
 @MainActor
 func startGUI() {
-    let port = 11438  // Avoid apfel defaults (11434/11435)
+    let port = apfelGUIPort
 
     // Find apfel in PATH or fall back to /usr/local/bin/apfel
     let apfelPath: String
