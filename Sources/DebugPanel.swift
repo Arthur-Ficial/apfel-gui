@@ -1,5 +1,6 @@
 // ============================================================================
 // DebugPanel.swift — Request/response JSON viewer with copy buttons
+// The truthful debug inspector — shows everything, hides nothing.
 // ============================================================================
 
 import SwiftUI
@@ -48,29 +49,61 @@ struct DebugPanel: View {
                                       systemImage: msg.role == "user" ? "person.circle" : "cpu")
                                 Spacer()
                                 if let ms = msg.durationMs {
-                                    Text("\(ms)ms")
-                                        .font(.system(.caption, design: .monospaced))
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.green.opacity(0.1))
-                                        .clipShape(Capsule())
+                                    pill("\(ms)ms", color: .green)
                                 }
                                 if let tokens = msg.tokenCount {
-                                    Text("\(tokens) tokens")
-                                        .font(.system(.caption, design: .monospaced))
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.blue.opacity(0.1))
-                                        .clipShape(Capsule())
+                                    pill("\(tokens) tokens", color: .blue)
+                                }
+                                if let reason = msg.finishReason {
+                                    pill(reason, color: finishReasonColor(reason))
                                 }
                             }
                             .font(.caption)
+
+                            // Detailed token breakdown
+                            if msg.promptTokens != nil || msg.completionTokens != nil {
+                                HStack(spacing: 12) {
+                                    if let pt = msg.promptTokens {
+                                        HStack(spacing: 3) {
+                                            Image(systemName: "arrow.up")
+                                                .foregroundStyle(.orange)
+                                            Text("\(pt) prompt")
+                                        }
+                                    }
+                                    if let ct = msg.completionTokens {
+                                        HStack(spacing: 3) {
+                                            Image(systemName: "arrow.down")
+                                                .foregroundStyle(.green)
+                                            Text("\(ct) completion")
+                                        }
+                                    }
+                                }
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        // Error type badge
+                        if let errorType = msg.errorType {
+                            infoCard {
+                                HStack {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundStyle(.red)
+                                    Text(APIClient.errorCategory(errorType))
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.red)
+                                    Spacer()
+                                    Text(errorType)
+                                        .font(.system(.caption2, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                         }
 
                         // Token budget bar
                         if let tokens = msg.tokenCount {
-                            let contextWindow = 4096
-                            let ratio = min(1.0, Double(tokens) / Double(contextWindow))
+                            let ctxWindow = viewModel.contextWindow
+                            let ratio = min(1.0, Double(tokens) / Double(ctxWindow))
                             let color: Color = ratio < 0.5 ? .green : ratio < 0.8 ? .yellow : .red
                             infoCard {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -79,7 +112,7 @@ struct DebugPanel: View {
                                         Text("Context Budget")
                                             .font(.caption.bold())
                                         Spacer()
-                                        Text("\(tokens) / \(contextWindow) tokens")
+                                        Text("\(tokens) / \(ctxWindow) tokens")
                                             .font(.system(.caption, design: .monospaced))
                                     }
                                     ProgressView(value: ratio)
@@ -88,8 +121,78 @@ struct DebugPanel: View {
                                         Image(systemName: "arrow.triangle.branch")
                                         Text("Strategy: \(strategyLabel)")
                                             .font(.system(.caption, design: .monospaced))
+                                        Spacer()
+                                        Text("\(Int(ratio * 100))% used")
+                                            .font(.system(.caption2, design: .monospaced))
+                                            .foregroundStyle(color)
                                     }
                                     .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+
+                        // Tool calls
+                        if let toolCalls = msg.toolCalls, !toolCalls.isEmpty {
+                            infoCard {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        Image(systemName: "wrench.and.screwdriver")
+                                            .foregroundStyle(.purple)
+                                        Text("Tool Calls (\(toolCalls.count))")
+                                            .font(.caption.bold())
+                                    }
+                                    ForEach(Array(toolCalls.enumerated()), id: \.offset) { _, tc in
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            HStack {
+                                                Text(tc.functionName)
+                                                    .font(.system(.caption, design: .monospaced))
+                                                    .fontWeight(.semibold)
+                                                Spacer()
+                                                CopyButton(text: tc.arguments)
+                                            }
+                                            Text(tc.arguments)
+                                                .font(.system(.caption2, design: .monospaced))
+                                                .textSelection(.enabled)
+                                                .padding(6)
+                                                .background(Color(nsColor: .textBackgroundColor).opacity(0.3))
+                                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Server-side event trace
+                        if let events = msg.serverEvents, !events.isEmpty {
+                            infoCard {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+                                            .foregroundStyle(.cyan)
+                                        Text("Server Trace")
+                                            .font(.caption.bold())
+                                        Spacer()
+                                        if let reqId = msg.serverRequestId {
+                                            Text(reqId)
+                                                .font(.system(.caption2, design: .monospaced))
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                    }
+                                    ForEach(Array(events.enumerated()), id: \.offset) { idx, event in
+                                        HStack(alignment: .top, spacing: 6) {
+                                            Text("\(idx + 1)")
+                                                .font(.system(.caption2, design: .monospaced))
+                                                .foregroundStyle(.quaternary)
+                                                .frame(width: 16, alignment: .trailing)
+                                            Circle()
+                                                .fill(eventColor(event))
+                                                .frame(width: 6, height: 6)
+                                                .padding(.top, 4)
+                                            Text(event)
+                                                .font(.system(.caption2, design: .monospaced))
+                                                .textSelection(.enabled)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -158,11 +261,23 @@ struct DebugPanel: View {
     // MARK: - Components
 
     @ViewBuilder
+    private func pill(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(.caption, design: .monospaced))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.1))
+            .clipShape(Capsule())
+    }
+
+    @ViewBuilder
     private func infoCard(@ViewBuilder content: () -> some View) -> some View {
-        content()
-            .padding(10)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+        VStack(alignment: .leading, spacing: 6) {
+            content()
+        }
+        .padding(10)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     @ViewBuilder
@@ -189,6 +304,27 @@ struct DebugPanel: View {
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(color.opacity(0.15), lineWidth: 1)
                 )
+        }
+    }
+
+    private func eventColor(_ event: String) -> Color {
+        if event.contains("error") || event.contains("fail") { return .red }
+        if event.contains("context built") { return .blue }
+        if event.contains("chunk") || event.contains("delta") { return .green }
+        if event.contains("tool") { return .purple }
+        if event.contains("stream") || event.contains("SSE") || event.contains("[DONE]") { return .orange }
+        if event.contains("finish_reason") || event.contains("sent [DONE]") { return .cyan }
+        if event.contains("request") || event.contains("decoded") { return .secondary }
+        return .secondary
+    }
+
+    private func finishReasonColor(_ reason: String) -> Color {
+        switch reason {
+        case "stop": return .green
+        case "tool_calls": return .purple
+        case "length": return .yellow
+        case "content_filter": return .red
+        default: return .secondary
         }
     }
 }

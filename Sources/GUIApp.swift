@@ -27,7 +27,7 @@ func startGUI() {
 
     let serverProcess = Process()
     serverProcess.executableURL = URL(fileURLWithPath: apfelPath)
-    serverProcess.arguments = ["--serve", "--port", "\(port)", "--cors"]
+    serverProcess.arguments = ["--serve", "--port", "\(port)", "--cors", "--debug"]
     serverProcess.standardOutput = FileHandle.nullDevice
     serverProcess.standardError = FileHandle.nullDevice
 

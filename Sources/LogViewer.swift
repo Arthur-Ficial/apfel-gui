@@ -1,6 +1,6 @@
 // ============================================================================
-// LogViewer.swift — Live request log viewer with filtering
-// Polls GET /v1/logs from the apfel server every 2 seconds.
+// LogViewer.swift — Live request log viewer with filtering and stats
+// Polls GET /v1/logs and /v1/logs/stats from the apfel server.
 // ============================================================================
 
 import SwiftUI
@@ -8,25 +8,48 @@ import SwiftUI
 struct LogViewer: View {
     let apiClient: APIClient
     @State private var logs: [APIClient.LogEntry] = []
+    @State private var stats: APIClient.ServerStats?
     @State private var errorsOnly = false
     @State private var isPolling = true
     @State private var expandedLogIDs: Set<String> = []
+    @State private var pathFilter: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
+            // Header with stats
             HStack(spacing: 8) {
                 Image(systemName: "list.bullet.rectangle")
                     .foregroundStyle(.green)
                 Text("Logs")
                     .font(.headline)
+
+                if let stats {
+                    Divider().frame(height: 12)
+                    statBadge("\(stats.total_requests) req", color: .blue)
+                    statBadge("\(stats.total_errors) err", color: stats.total_errors > 0 ? .red : .green)
+                    statBadge("\(stats.avg_duration_ms)ms avg", color: .orange)
+                    if let tokens = stats.estimated_tokens_total {
+                        statBadge("~\(formatNumber(tokens))t", color: .purple)
+                    }
+                    statBadge(formatUptime(stats.uptime_seconds), color: .secondary)
+                    if stats.active_requests > 0 {
+                        statBadge("\(stats.active_requests) active", color: .cyan)
+                    }
+                }
+
                 Spacer()
+
+                // Path filter
+                TextField("Filter path...", text: $pathFilter)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.caption2, design: .monospaced))
+                    .frame(width: 120)
 
                 Toggle("Errors only", isOn: $errorsOnly)
                     .toggleStyle(.checkbox)
                     .font(.caption)
 
-                Text("\(logs.count) entries")
+                Text("\(filteredLogs.count) entries")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
@@ -54,12 +77,16 @@ struct LogViewer: View {
             }
         }
         .task {
-            // Poll logs every 2 seconds
             while isPolling {
                 do {
-                    logs = try await apiClient.fetchLogs(errorsOnly: false, limit: 200)
+                    async let logsResult = apiClient.fetchLogs(errorsOnly: false, limit: 200)
+                    async let statsResult: APIClient.ServerStats? = {
+                        try? await apiClient.fetchStats()
+                    }()
+                    logs = try await logsResult
+                    stats = await statsResult
                 } catch {
-                    // Silently ignore fetch errors
+                    // Silently ignore — server might not have --debug enabled
                 }
                 try? await Task.sleep(for: .seconds(2))
             }
@@ -68,10 +95,14 @@ struct LogViewer: View {
     }
 
     private var filteredLogs: [APIClient.LogEntry] {
+        var result = logs
         if errorsOnly {
-            return logs.filter { $0.status >= 400 }
+            result = result.filter { $0.status >= 400 }
         }
-        return logs
+        if !pathFilter.isEmpty {
+            result = result.filter { $0.path.localizedCaseInsensitiveContains(pathFilter) }
+        }
+        return result
     }
 
     private func logRow(_ log: APIClient.LogEntry) -> some View {
@@ -83,7 +114,12 @@ struct LogViewer: View {
                     .foregroundStyle(.tertiary)
                     .frame(width: 70, alignment: .leading)
 
-                Text("\(log.method) \(log.path)")
+                Text(log.method)
+                    .font(.system(.caption2, design: .monospaced))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.blue)
+
+                Text(log.path)
                     .font(.system(.caption, design: .monospaced))
                     .lineLimit(1)
 
@@ -98,19 +134,24 @@ struct LogViewer: View {
                 Text("\(log.status)")
                     .font(.system(.caption, design: .monospaced))
                     .fontWeight(.semibold)
-                    .foregroundStyle(log.status >= 400 ? .red : .green)
+                    .foregroundStyle(statusColor(log.status))
 
                 Text("\(log.duration_ms)ms")
                     .font(.system(.caption2, design: .monospaced))
                     .foregroundStyle(.secondary)
-                    .frame(width: 50, alignment: .trailing)
+                    .frame(width: 55, alignment: .trailing)
 
                 if let tokens = log.estimated_tokens {
                     Text("~\(tokens)t")
                         .font(.system(.caption2, design: .monospaced))
                         .foregroundStyle(.tertiary)
-                        .frame(width: 40, alignment: .trailing)
+                        .frame(width: 45, alignment: .trailing)
                 }
+
+                // Expand/collapse indicator
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.quaternary)
             }
 
             if let error = log.error, !error.isEmpty {
@@ -121,20 +162,30 @@ struct LogViewer: View {
             }
 
             if isExpanded {
-                detailSection("Request", log.request_body)
-                detailSection("Response", log.response_body)
-                if let events = log.events, !events.isEmpty {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Events")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        ForEach(Array(events.enumerated()), id: \.offset) { _, event in
-                            Text(event)
-                                .font(.system(.caption2, design: .monospaced))
-                                .textSelection(.enabled)
+                VStack(alignment: .leading, spacing: 8) {
+                    detailSection("Request Body", log.request_body)
+                    detailSection("Response Body", log.response_body)
+                    if let events = log.events, !events.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Events")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.secondary)
+                            ForEach(Array(events.enumerated()), id: \.offset) { idx, event in
+                                HStack(spacing: 4) {
+                                    Text("\(idx + 1).")
+                                        .font(.system(.caption2, design: .monospaced))
+                                        .foregroundStyle(.quaternary)
+                                        .frame(width: 20, alignment: .trailing)
+                                    Text(event)
+                                        .font(.system(.caption2, design: .monospaced))
+                                        .textSelection(.enabled)
+                                }
+                            }
                         }
                     }
                 }
+                .padding(.leading, 78)
+                .padding(.top, 4)
             }
         }
         .padding(.horizontal, 12)
@@ -154,23 +205,55 @@ struct LogViewer: View {
     private func detailSection(_ title: String, _ content: String?) -> some View {
         if let content, !content.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text(title)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    CopyButton(text: content)
+                }
                 Text(content)
                     .font(.system(.caption2, design: .monospaced))
                     .textSelection(.enabled)
+                    .lineLimit(20)
             }
         }
     }
 
+    @ViewBuilder
+    private func statBadge(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(.caption2, design: .monospaced))
+            .foregroundStyle(color)
+    }
+
+    private func statusColor(_ status: Int) -> Color {
+        switch status {
+        case 200..<300: return .green
+        case 400..<500: return .orange
+        case 500...: return .red
+        default: return .secondary
+        }
+    }
+
     private func formatTimestamp(_ iso: String) -> String {
-        // Extract HH:MM:SS from ISO 8601
         if let tIdx = iso.firstIndex(of: "T"),
            let zIdx = iso.firstIndex(of: "Z") ?? iso.lastIndex(of: "+") {
             let time = iso[iso.index(after: tIdx)..<zIdx]
             return String(time)
         }
         return iso
+    }
+
+    private func formatUptime(_ seconds: Int) -> String {
+        if seconds < 60 { return "\(seconds)s" }
+        if seconds < 3600 { return "\(seconds / 60)m" }
+        return "\(seconds / 3600)h \((seconds % 3600) / 60)m"
+    }
+
+    private func formatNumber(_ n: Int) -> String {
+        if n >= 1_000_000 { return "\(n / 1_000_000)M" }
+        if n >= 1_000 { return "\(n / 1_000)K" }
+        return "\(n)"
     }
 }

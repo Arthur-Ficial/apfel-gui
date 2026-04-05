@@ -77,13 +77,23 @@ struct ChatView: View {
 
             Divider()
 
+            // Error banner with typed error display
             if let errorMessage = visibleErrorMessage {
                 HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
-                    Text(errorMessage)
-                        .font(.caption)
-                        .foregroundStyle(.primary)
+                    Image(systemName: errorIcon)
+                        .foregroundStyle(errorColor)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let errorType = viewModel.errorType {
+                            Text(APIClient.errorCategory(errorType))
+                                .font(.caption.bold())
+                                .foregroundStyle(errorColor)
+                        }
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundStyle(.primary)
+                    }
+
                     if viewModel.stt.shouldOfferOpenSettings {
                         Button("Open System Settings") {
                             viewModel.stt.openSystemSettings()
@@ -91,10 +101,19 @@ struct ChatView: View {
                         .font(.caption)
                     }
                     Spacer(minLength: 0)
+
+                    Button(action: {
+                        viewModel.errorMessage = nil
+                        viewModel.errorType = nil
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.borderless)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(Color(nsColor: .controlBackgroundColor))
+                .background(errorBackgroundColor)
 
                 Divider()
             }
@@ -176,7 +195,6 @@ struct ChatView: View {
             .padding(.vertical, 10)
         }
         .onAppear {
-            // Focus the message input on launch
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 focusedField = .messageInput
             }
@@ -193,6 +211,11 @@ struct ChatView: View {
                 .font(.title3)
                 .fontWeight(.medium)
                 .foregroundStyle(.secondary)
+            if !viewModel.serverVersion.isEmpty {
+                Text("apfel v\(viewModel.serverVersion) · \(viewModel.contextWindow)t context")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
             Text("Press Enter to send")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
@@ -203,6 +226,32 @@ struct ChatView: View {
 
     private var canSend: Bool {
         !viewModel.currentInput.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.isStreaming
+    }
+
+    private var errorIcon: String {
+        switch viewModel.errorType {
+        case "content_policy_violation": return "shield.lefthalf.filled"
+        case "context_length_exceeded": return "text.word.spacing"
+        case "rate_limit_error": return "clock.arrow.2.circlepath"
+        default: return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var errorColor: Color {
+        switch viewModel.errorType {
+        case "content_policy_violation": return .orange
+        case "context_length_exceeded": return .purple
+        case "rate_limit_error": return .blue
+        default: return .yellow
+        }
+    }
+
+    private var errorBackgroundColor: Color {
+        switch viewModel.errorType {
+        case "content_policy_violation": return Color.orange.opacity(0.05)
+        case "rate_limit_error": return Color.blue.opacity(0.05)
+        default: return Color(nsColor: .controlBackgroundColor)
+        }
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {

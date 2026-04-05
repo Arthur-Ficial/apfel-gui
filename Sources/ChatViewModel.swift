@@ -18,6 +18,13 @@ struct ChatMsg: Identifiable {
     var curlCommand: String?
     var durationMs: Int?
     var tokenCount: Int?
+    var promptTokens: Int?
+    var completionTokens: Int?
+    var finishReason: String?
+    var toolCalls: [APIClient.ToolCallAccumulator]?
+    var errorType: String?
+    var serverRequestId: String?    // matches /v1/logs entry ID
+    var serverEvents: [String]?     // events from server-side log
     var isStreaming: Bool = false
     var includeInHistory: Bool = true
 }
@@ -32,6 +39,7 @@ class ChatViewModel {
     var isStreaming: Bool = false
     var selectedMessageId: String?
     var errorMessage: String?
+    var errorType: String?
     var showDebugPanel: Bool = true
     var showLogPanel: Bool = true
     var debugAutoFollow: Bool = true
@@ -39,27 +47,65 @@ class ChatViewModel {
     var isSelfDiscussing: Bool = false
     var showSelfDiscussion: Bool = false
     var showContextSettings: Bool = false
+    var showModelSettings: Bool = false
     var contextStrategyRaw: String = ContextStrategy.newestFirst.rawValue
     var contextMaxTurns: Int? = nil
     var contextOutputReserve: Int = 512
+
+    // Model settings
+    var temperature: Double? = nil
+    var maxTokens: Int? = nil
+    var seed: Int? = nil
+    var jsonMode: Bool = false
+
+    // Server info (fetched on startup)
+    var serverVersion: String = ""
+    var contextWindow: Int = 4096
+    var modelAvailable: Bool = true
+    var supportedLanguages: [String] = []
+    var supportedParameters: [String] = []
+    var unsupportedParameters: [String] = []
+    var modelNotes: String = ""
+    var activeRequests: Int = 0
+    var serverStatus: String = "connecting"
 
     var contextStrategy: ContextStrategy {
         get { ContextStrategy(rawValue: contextStrategyRaw) ?? .newestFirst }
         set { contextStrategyRaw = newValue.rawValue }
     }
 
-    let apiClient: APIClient
+    var apiClient: APIClient
     let tts = TTSManager()
     let stt = STTManager()
 
     init(apiClient: APIClient) {
         self.apiClient = apiClient
+        Task { await fetchServerInfo() }
     }
 
     /// The currently selected message (for debug panel).
     var selectedMessage: ChatMsg? {
         guard let id = selectedMessageId else { return nil }
         return messages.first { $0.id == id }
+    }
+
+    /// Fetch server info from /health and /v1/models.
+    func fetchServerInfo() async {
+        if let health = await apiClient.fetchHealth() {
+            serverVersion = health.version ?? ""
+            contextWindow = health.context_window ?? 4096
+            modelAvailable = health.model_available ?? true
+            supportedLanguages = health.supported_languages ?? []
+            activeRequests = health.active_requests ?? 0
+            serverStatus = health.status
+        }
+        let models = await apiClient.fetchModels()
+        if let model = models.first {
+            if let cw = model.context_window { contextWindow = cw }
+            supportedParameters = model.supported_parameters ?? []
+            unsupportedParameters = model.unsupported_parameters ?? []
+            modelNotes = model.notes ?? ""
+        }
     }
 
     /// Send the current input as a message and stream the response.
@@ -72,14 +118,23 @@ class ChatViewModel {
             .map { (role: $0.role, content: $0.content) }
         history.append((role: "user", content: input))
 
-        // Get request JSON early so user message can show it too
+        // Build request params
         let currentStrategy = ContextStrategy(rawValue: contextStrategyRaw) ?? .newestFirst
         let strategy = currentStrategy == .newestFirst ? nil : currentStrategy.rawValue
         let maxTurns = contextMaxTurns
         let reserve = contextOutputReserve == 512 ? nil : contextOutputReserve
+        let temp = temperature
+        let maxTok = maxTokens
+        let seedVal = seed
+        let json = jsonMode
+
         let (stream, requestJSON) = apiClient.streamChatCompletion(
             messages: history,
             systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt,
+            temperature: temp,
+            maxTokens: maxTok,
+            seed: seedVal,
+            jsonMode: json,
             contextStrategy: strategy,
             contextMaxTurns: maxTurns,
             contextOutputReserve: reserve
@@ -87,7 +142,7 @@ class ChatViewModel {
 
         // Build curl command for debug
         let port = 11434
-        let curlCmd = "curl -X POST http://127.0.0.1:\(port)/v1/chat/completions \\\n  -H \"Content-Type: application/json\" \\\n  -d '\(requestJSON.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: "  ", with: ""))'"
+        let curlCmd = buildCurlCommand(requestJSON: requestJSON, port: port)
 
         // Add user message (with request JSON attached)
         let userId = UUID().uuidString
@@ -103,6 +158,7 @@ class ChatViewModel {
         currentInput = ""
         isStreaming = true
         errorMessage = nil
+        errorType = nil
 
         // Create assistant message placeholder
         let assistantId = UUID().uuidString
@@ -125,17 +181,46 @@ class ChatViewModel {
 
             let durationMs = Int(Date().timeIntervalSince(start) * 1000)
             let rawResponse = APIClient.lastRawSSEResponse
+            let usage = APIClient.lastStreamingUsage
+            let finishReason = APIClient.lastFinishReason
+            let toolCalls = APIClient.lastToolCalls
+            let requestId = APIClient.lastRequestId
             let assistantContent = messages.first(where: { $0.id == assistantId })?.content.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
             updateMessage(id: assistantId) { msg in
                 msg.isStreaming = false
                 msg.durationMs = durationMs
-                msg.tokenCount = APIClient.lastStreamingUsage?.totalTokens
+                msg.tokenCount = usage?.totalTokens
+                msg.promptTokens = usage?.promptTokens
+                msg.completionTokens = usage?.completionTokens
+                msg.finishReason = finishReason
                 msg.responseJSON = rawResponse
+                msg.serverRequestId = requestId
+                if !toolCalls.isEmpty {
+                    msg.toolCalls = toolCalls
+                    var toolContent = ""
+                    for tc in toolCalls {
+                        toolContent += "\n\n[Tool Call: \(tc.functionName)]\n\(tc.arguments)"
+                    }
+                    if !toolContent.isEmpty && assistantContent.isEmpty {
+                        msg.content = toolContent.trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
+                }
             }
+
+            // Fetch server-side events for this request (async, non-blocking)
+            if let reqId = requestId {
+                Task {
+                    if let logEntry = await apiClient.fetchLogEntry(requestId: reqId) {
+                        updateMessage(id: assistantId) { $0.serverEvents = logEntry.events }
+                    }
+                }
+            }
+
             if shouldExcludeTurnFromHistory(assistantContent) {
                 updateMessage(id: userId) { $0.includeInHistory = false }
                 updateMessage(id: assistantId) { $0.includeInHistory = false }
-                if assistantContent.isEmpty {
+                if assistantContent.isEmpty && toolCalls.isEmpty {
                     updateMessage(id: assistantId) { $0.content = "Error: Empty response from model." }
                     errorMessage = "Empty response from model."
                 }
@@ -147,14 +232,31 @@ class ChatViewModel {
             }
 
             // Speak the response if TTS is enabled
-            if speakEnabled, let content = messages.first(where: { $0.id == assistantId })?.content {
+            if speakEnabled, let content = messages.first(where: { $0.id == assistantId })?.content,
+               !content.isEmpty, !content.hasPrefix("Error:"), !content.hasPrefix("[Tool Call:") {
                 tts.speak(content)
             }
+
+            // Refresh server info (active requests count)
+            Task { await fetchServerInfo() }
+
+        } catch let error as APIClient.StreamError {
+            updateMessage(id: assistantId) { msg in
+                msg.content = "Error: \(error.message)"
+                msg.isStreaming = false
+                msg.includeInHistory = false
+                msg.errorType = error.errorType
+                msg.responseJSON = APIClient.lastRawSSEResponse
+            }
+            updateMessage(id: userId) { $0.includeInHistory = false }
+            errorMessage = error.message
+            errorType = error.errorType
         } catch {
             updateMessage(id: assistantId) { msg in
                 msg.content = "Error: \(error.localizedDescription)"
                 msg.isStreaming = false
                 msg.includeInHistory = false
+                msg.responseJSON = APIClient.lastRawSSEResponse
             }
             updateMessage(id: userId) { $0.includeInHistory = false }
             errorMessage = error.localizedDescription
@@ -168,6 +270,7 @@ class ChatViewModel {
         messages.removeAll()
         selectedMessageId = nil
         errorMessage = nil
+        errorType = nil
     }
 
     // MARK: - Helpers
@@ -178,13 +281,9 @@ class ChatViewModel {
         }
     }
 
-    private func jsonEscape(_ str: String) -> String {
-        let escaped = str
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-            .replacingOccurrences(of: "\n", with: "\\n")
-            .replacingOccurrences(of: "\t", with: "\\t")
-        return "\"\(escaped)\""
+    private func buildCurlCommand(requestJSON: String, port: Int) -> String {
+        let compact = requestJSON.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: "  ", with: "")
+        return "curl -X POST http://127.0.0.1:\(port)/v1/chat/completions \\\n  -H \"Content-Type: application/json\" \\\n  -d '\(compact)'"
     }
 
     private func shouldExcludeTurnFromHistory(_ assistantContent: String) -> Bool {
@@ -199,6 +298,7 @@ class ChatViewModel {
             "i'm sorry, but i cannot assist",
             "unsafe",
             "safety reasons",
+            "guardrail",
             "error:"
         ]
         return refusalPatterns.contains { lowered.contains($0) }
@@ -285,7 +385,10 @@ class ChatViewModel {
             let history: [(role: String, content: String)] = [(role: "user", content: prompt)]
             let (stream, requestJSON) = apiClient.streamChatCompletion(
                 messages: history,
-                systemPrompt: systemPromptForTurn
+                systemPrompt: systemPromptForTurn,
+                temperature: temperature,
+                maxTokens: maxTokens,
+                seed: seed
             )
 
             updateMessage(id: msgId) { $0.requestJSON = requestJSON }
@@ -298,10 +401,14 @@ class ChatViewModel {
 
                 let durationMs = Int(Date().timeIntervalSince(start) * 1000)
                 let rawResponse = APIClient.lastRawSSEResponse
+                let usage = APIClient.lastStreamingUsage
                 updateMessage(id: msgId) { msg in
                     msg.isStreaming = false
                     msg.durationMs = durationMs
-                    msg.tokenCount = nil  // real count comes from server usage stats
+                    msg.tokenCount = usage?.totalTokens
+                    msg.promptTokens = usage?.promptTokens
+                    msg.completionTokens = usage?.completionTokens
+                    msg.finishReason = APIClient.lastFinishReason
                     msg.responseJSON = rawResponse
                 }
 
@@ -314,7 +421,6 @@ class ChatViewModel {
                 // Speak if enabled
                 if speakEnabled, !previousResponse.isEmpty {
                     tts.speak(previousResponse, languageCode: speechLanguage, voiceVariant: isA ? 0 : 1)
-                    // Wait for speech to finish before next turn
                     while tts.isSpeaking {
                         try? await Task.sleep(for: .milliseconds(200))
                     }
