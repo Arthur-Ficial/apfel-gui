@@ -200,12 +200,10 @@ class ChatViewModel {
                 msg.serverRequestId = requestId
                 if !toolCalls.isEmpty {
                     msg.toolCalls = toolCalls
-                    var toolContent = ""
-                    for tc in toolCalls {
-                        toolContent += "\n\n[Tool Call: \(tc.functionName)]\n\(tc.arguments)"
-                    }
-                    if !toolContent.isEmpty && assistantContent.isEmpty {
-                        msg.content = toolContent.trimmingCharacters(in: .whitespacesAndNewlines)
+                    // Don't put raw tool call JSON in the content — show it cleanly via MessageBubble
+                    if assistantContent.isEmpty {
+                        let names = toolCalls.map(\.functionName).joined(separator: ", ")
+                        msg.content = "Called tool: \(names)"
                     }
                 }
             }
