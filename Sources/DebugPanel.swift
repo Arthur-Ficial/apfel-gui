@@ -42,33 +42,95 @@ struct DebugPanel: View {
             if let msg = viewModel.selectedMessage {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        // Server launch command (always shown)
-                        if !viewModel.serverLaunchCommand.isEmpty {
+
+                        // =============================================
+                        // 1. WHAT WE SENT (the request)
+                        // =============================================
+
+                        if let json = msg.requestJSON {
                             codeSection(
-                                title: "Server Launch Command",
-                                icon: "power",
-                                text: viewModel.serverLaunchCommand,
-                                color: .cyan
+                                title: "1. Request (HTTP Body)",
+                                icon: "arrow.up.doc.fill",
+                                text: json,
+                                color: .orange
                             )
                         }
 
-                        // Equivalent apfel CLI command
-                        if msg.role == "user" || msg.role == "assistant" {
-                            let cliCmd = buildApfelCLICommand(for: msg)
-                            if !cliCmd.isEmpty {
-                                codeSection(
-                                    title: "Equivalent apfel CLI Command",
-                                    icon: "terminal.fill",
-                                    text: cliCmd,
-                                    color: .orange
-                                )
+                        // =============================================
+                        // 2. SERVER PROCESSING (what happened inside apfel)
+                        // =============================================
+
+                        // Server trace (chronological events)
+                        if let events = msg.serverEvents, !events.isEmpty {
+                            infoCard {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+                                            .foregroundStyle(.cyan)
+                                        Text("2. Server Processing")
+                                            .font(.caption.bold())
+                                        Spacer()
+                                        if let reqId = msg.serverRequestId {
+                                            Text(reqId)
+                                                .font(.system(.caption2, design: .monospaced))
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                    }
+                                    ForEach(Array(events.enumerated()), id: \.offset) { idx, event in
+                                        HStack(alignment: .top, spacing: 6) {
+                                            Text("\(idx + 1)")
+                                                .font(.system(.caption2, design: .monospaced))
+                                                .foregroundStyle(.quaternary)
+                                                .frame(width: 16, alignment: .trailing)
+                                            Circle()
+                                                .fill(eventColor(event))
+                                                .frame(width: 6, height: 6)
+                                                .padding(.top, 4)
+                                            Text(event)
+                                                .font(.system(.caption2, design: .monospaced))
+                                                .textSelection(.enabled)
+                                        }
+                                    }
+                                }
                             }
                         }
 
-                        // Message info
+                        // =============================================
+                        // 3. MCP TOOL CALLS (if any)
+                        // =============================================
+
+                        if let events = msg.serverEvents {
+                            let mcpToolEvents = events.filter { $0.hasPrefix("mcp tool:") }
+                            if !mcpToolEvents.isEmpty {
+                                ForEach(Array(mcpToolEvents.enumerated()), id: \.offset) { _, event in
+                                    let detail = String(event.dropFirst(10))
+                                    let parsed = parseMCPToolEvent(detail)
+
+                                    codeSection(
+                                        title: "3a. MCP Request (JSON-RPC tools/call)",
+                                        icon: "arrow.up.doc.fill",
+                                        text: parsed.requestJSON,
+                                        color: .purple
+                                    )
+
+                                    codeSection(
+                                        title: "3b. MCP Response (JSON-RPC result)",
+                                        icon: "arrow.down.doc.fill",
+                                        text: parsed.responseJSON,
+                                        color: .green
+                                    )
+                                }
+                            }
+                        }
+
+                        // =============================================
+                        // 4. RESPONSE (what came back)
+                        // =============================================
+
+                        // Summary card
                         infoCard {
                             HStack {
-                                Label(msg.role == "user" ? "User Message" : "AI Response",
+                                Label(msg.role == "user" ? "User Message" : "4. Response",
                                       systemImage: msg.role == "user" ? "person.circle" : "cpu")
                                 Spacer()
                                 if let ms = msg.durationMs {
@@ -83,7 +145,6 @@ struct DebugPanel: View {
                             }
                             .font(.caption)
 
-                            // Detailed token breakdown
                             if msg.promptTokens != nil || msg.completionTokens != nil {
                                 HStack(spacing: 12) {
                                     if let pt = msg.promptTokens {
@@ -106,7 +167,7 @@ struct DebugPanel: View {
                             }
                         }
 
-                        // Error type badge
+                        // Error type
                         if let errorType = msg.errorType {
                             infoCard {
                                 HStack {
@@ -123,7 +184,7 @@ struct DebugPanel: View {
                             }
                         }
 
-                        // Token budget bar
+                        // Context budget
                         if let tokens = msg.tokenCount {
                             let ctxWindow = viewModel.contextWindow
                             let ratio = min(1.0, Double(tokens) / Double(ctxWindow))
@@ -154,162 +215,49 @@ struct DebugPanel: View {
                             }
                         }
 
-                        // Tool calls
-                        if let toolCalls = msg.toolCalls, !toolCalls.isEmpty {
-                            infoCard {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack {
-                                        Image(systemName: "wrench.and.screwdriver")
-                                            .foregroundStyle(.purple)
-                                        Text("Tool Calls (\(toolCalls.count))")
-                                            .font(.caption.bold())
-                                    }
-                                    ForEach(Array(toolCalls.enumerated()), id: \.offset) { _, tc in
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            HStack {
-                                                Text(tc.functionName)
-                                                    .font(.system(.caption, design: .monospaced))
-                                                    .fontWeight(.semibold)
-                                                Spacer()
-                                                CopyButton(text: tc.arguments)
-                                            }
-                                            Text(tc.arguments)
-                                                .font(.system(.caption2, design: .monospaced))
-                                                .textSelection(.enabled)
-                                                .padding(6)
-                                                .background(Color(nsColor: .textBackgroundColor).opacity(0.3))
-                                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // MCP Tool Execution - Full JSON-RPC request/response
-                        if let events = msg.serverEvents {
-                            let mcpToolEvents = events.filter { $0.hasPrefix("mcp tool:") }
-                            let mcpOtherEvents = events.filter { ($0.hasPrefix("mcp ") || $0.hasPrefix("mcp:")) && !$0.hasPrefix("mcp tool:") }
-                            if !mcpToolEvents.isEmpty {
-                                // Show full JSON-RPC for each tool call
-                                ForEach(Array(mcpToolEvents.enumerated()), id: \.offset) { _, event in
-                                    let detail = String(event.dropFirst(10)) // drop "mcp tool: "
-                                    let parsed = parseMCPToolEvent(detail)
-
-                                    // MCP JSON-RPC Request
-                                    codeSection(
-                                        title: "MCP Request (JSON-RPC tools/call)",
-                                        icon: "arrow.up.doc.fill",
-                                        text: parsed.requestJSON,
-                                        color: .purple
-                                    )
-
-                                    // MCP JSON-RPC Response
-                                    codeSection(
-                                        title: "MCP Response (JSON-RPC result)",
-                                        icon: "arrow.down.doc.fill",
-                                        text: parsed.responseJSON,
-                                        color: .green
-                                    )
-                                }
-                            }
-                            if !mcpOtherEvents.isEmpty {
-                                infoCard {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        HStack {
-                                            Image(systemName: "wrench.and.screwdriver")
-                                                .foregroundStyle(.purple)
-                                            Text("MCP Events")
-                                                .font(.caption.bold())
-                                            Spacer()
-                                        }
-                                        ForEach(Array(mcpOtherEvents.enumerated()), id: \.offset) { _, event in
-                                            HStack(spacing: 4) {
-                                                Circle()
-                                                    .fill(Color.purple.opacity(0.6))
-                                                    .frame(width: 5, height: 5)
-                                                Text(event)
-                                                    .font(.system(.caption2, design: .monospaced))
-                                                    .foregroundStyle(.secondary)
-                                                    .textSelection(.enabled)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Server-side event trace
-                        if let events = msg.serverEvents, !events.isEmpty {
-                            infoCard {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack {
-                                        Image(systemName: "point.3.filled.connected.trianglepath.dotted")
-                                            .foregroundStyle(.cyan)
-                                        Text("Server Trace")
-                                            .font(.caption.bold())
-                                        Spacer()
-                                        if let reqId = msg.serverRequestId {
-                                            Text(reqId)
-                                                .font(.system(.caption2, design: .monospaced))
-                                                .foregroundStyle(.tertiary)
-                                        }
-                                    }
-                                    ForEach(Array(events.enumerated()), id: \.offset) { idx, event in
-                                        HStack(alignment: .top, spacing: 6) {
-                                            Text("\(idx + 1)")
-                                                .font(.system(.caption2, design: .monospaced))
-                                                .foregroundStyle(.quaternary)
-                                                .frame(width: 16, alignment: .trailing)
-                                            Circle()
-                                                .fill(eventColor(event))
-                                                .frame(width: 6, height: 6)
-                                                .padding(.top, 4)
-                                            Text(event)
-                                                .font(.system(.caption2, design: .monospaced))
-                                                .textSelection(.enabled)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // curl command
-                        if let curl = msg.curlCommand {
-                            codeSection(
-                                title: "curl Command (copy & paste to reproduce)",
-                                icon: "terminal",
-                                text: curl,
-                                color: .purple
-                            )
-                        }
-
-                        // What we SENT to the server
-                        if let json = msg.requestJSON {
-                            codeSection(
-                                title: "What We Sent (HTTP Request Body)",
-                                icon: "arrow.up.doc.fill",
-                                text: json,
-                                color: .orange
-                            )
-                        }
-
-                        // What the server RESPONDED with (raw, truthful)
+                        // Raw SSE response
                         if let json = msg.responseJSON {
                             codeSection(
-                                title: "What We Got Back (Raw Server Response)",
+                                title: "Raw Server Response (SSE)",
                                 icon: "arrow.down.doc.fill",
                                 text: json,
                                 color: .green
                             )
                         }
 
-                        // Extracted content
-                        codeSection(
-                            title: "Extracted Content",
-                            icon: "text.quote",
-                            text: msg.content,
-                            color: .primary
-                        )
+                        // =============================================
+                        // 5. REPRODUCE (copy-paste commands)
+                        // =============================================
+
+                        if let curl = msg.curlCommand {
+                            codeSection(
+                                title: "5a. curl Command",
+                                icon: "terminal",
+                                text: curl,
+                                color: .blue
+                            )
+                        }
+
+                        if msg.role == "user" || msg.role == "assistant" {
+                            let cliCmd = buildApfelCLICommand(for: msg)
+                            if !cliCmd.isEmpty {
+                                codeSection(
+                                    title: "5b. Equivalent apfel CLI",
+                                    icon: "terminal.fill",
+                                    text: cliCmd,
+                                    color: .orange
+                                )
+                            }
+                        }
+
+                        if !viewModel.serverLaunchCommand.isEmpty {
+                            codeSection(
+                                title: "5c. Server Launch Command",
+                                icon: "power",
+                                text: viewModel.serverLaunchCommand,
+                                color: .cyan
+                            )
+                        }
                     }
                     .padding(12)
                 }
