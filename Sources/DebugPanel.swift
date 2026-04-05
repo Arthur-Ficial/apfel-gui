@@ -44,6 +44,19 @@ struct DebugPanel: View {
                     VStack(alignment: .leading, spacing: 16) {
 
                         // =============================================
+                        // SERVER CONTEXT (how we started)
+                        // =============================================
+
+                        if !viewModel.serverLaunchCommand.isEmpty {
+                            codeSection(
+                                title: "0. Server Launch Command",
+                                icon: "power",
+                                text: viewModel.serverLaunchCommand,
+                                color: .cyan
+                            )
+                        }
+
+                        // =============================================
                         // 1. WHAT WE SENT (the request)
                         // =============================================
 
@@ -248,15 +261,6 @@ struct DebugPanel: View {
                                     color: .orange
                                 )
                             }
-                        }
-
-                        if !viewModel.serverLaunchCommand.isEmpty {
-                            codeSection(
-                                title: "5c. Server Launch Command",
-                                icon: "power",
-                                text: viewModel.serverLaunchCommand,
-                                color: .cyan
-                            )
                         }
                     }
                     .padding(12)
