@@ -42,6 +42,29 @@ struct DebugPanel: View {
             if let msg = viewModel.selectedMessage {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
+                        // Server launch command (always shown)
+                        if !viewModel.serverLaunchCommand.isEmpty {
+                            codeSection(
+                                title: "Server Launch Command",
+                                icon: "power",
+                                text: viewModel.serverLaunchCommand,
+                                color: .cyan
+                            )
+                        }
+
+                        // Equivalent apfel CLI command
+                        if msg.role == "user" || msg.role == "assistant" {
+                            let cliCmd = buildApfelCLICommand(for: msg)
+                            if !cliCmd.isEmpty {
+                                codeSection(
+                                    title: "Equivalent apfel CLI Command",
+                                    icon: "terminal.fill",
+                                    text: cliCmd,
+                                    color: .orange
+                                )
+                            }
+                        }
+
                         // Message info
                         infoCard {
                             HStack {
@@ -309,6 +332,67 @@ struct DebugPanel: View {
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    // MARK: - CLI Command Builder
+
+    /// Build an equivalent `apfel` CLI command for the given message.
+    private func buildApfelCLICommand(for msg: ChatMsg) -> String {
+        // Find the user message content (either this message or the one before it)
+        let userContent: String
+        if msg.role == "user" {
+            userContent = msg.content
+        } else if let idx = viewModel.messages.firstIndex(where: { $0.id == msg.id }),
+                  idx > 0, viewModel.messages[idx - 1].role == "user" {
+            userContent = viewModel.messages[idx - 1].content
+        } else {
+            return ""
+        }
+
+        var parts = ["apfel"]
+
+        // System prompt
+        if !viewModel.systemPrompt.isEmpty {
+            parts.append("-s \"\(viewModel.systemPrompt.replacingOccurrences(of: "\"", with: "\\\""))\"")
+        }
+
+        // Model settings
+        if let t = viewModel.temperature {
+            parts.append("--temperature \(String(format: "%.1f", t))")
+        }
+        if let m = viewModel.maxTokens {
+            parts.append("--max-tokens \(m)")
+        }
+        if let s = viewModel.seed {
+            parts.append("--seed \(s)")
+        }
+
+        // Context strategy
+        let strategy = viewModel.contextStrategy
+        if strategy != .newestFirst {
+            parts.append("--context-strategy \(strategy.rawValue)")
+        }
+        if let maxTurns = viewModel.contextMaxTurns {
+            parts.append("--context-max-turns \(maxTurns)")
+        }
+        if viewModel.contextOutputReserve != 512 {
+            parts.append("--context-output-reserve \(viewModel.contextOutputReserve)")
+        }
+
+        // MCP servers
+        for path in viewModel.mcpServerPaths {
+            parts.append("--mcp \(path)")
+        }
+
+        // JSON mode
+        if viewModel.jsonMode {
+            parts.append("-o json")
+        }
+
+        // The prompt
+        parts.append("\"\(userContent.replacingOccurrences(of: "\"", with: "\\\"").replacingOccurrences(of: "\n", with: "\\n"))\"")
+
+        return parts.joined(separator: " \\\n  ")
     }
 
     // MARK: - MCP JSON-RPC Reconstruction

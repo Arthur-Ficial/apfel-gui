@@ -67,10 +67,16 @@ func startGUI() {
     let app = NSApplication.shared
     app.setActivationPolicy(.regular)
 
+    // Build the full launch command string for display
+    let launchCommand = ([apfelPath] + arguments).map { arg in
+        arg.contains(" ") ? "\"\(arg)\"" : arg
+    }.joined(separator: " ")
+
     let delegate = GUIAppDelegate(
         serverProcess: serverProcess,
         apiClient: client,
-        mcpPaths: mcpPaths
+        mcpPaths: mcpPaths,
+        serverLaunchCommand: launchCommand
     )
     app.delegate = delegate
     app.run()
@@ -194,18 +200,21 @@ class GUIAppDelegate: NSObject, NSApplicationDelegate {
     let serverProcess: Process
     let apiClient: APIClient
     let mcpPaths: [String]
+    let serverLaunchCommand: String
     var window: NSWindow?
     var viewModel: ChatViewModel?
 
-    init(serverProcess: Process, apiClient: APIClient, mcpPaths: [String]) {
+    init(serverProcess: Process, apiClient: APIClient, mcpPaths: [String], serverLaunchCommand: String) {
         self.serverProcess = serverProcess
         self.apiClient = apiClient
         self.mcpPaths = mcpPaths
+        self.serverLaunchCommand = serverLaunchCommand
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let viewModel = ChatViewModel(apiClient: apiClient)
         viewModel.mcpServerPaths = mcpPaths
+        viewModel.serverLaunchCommand = serverLaunchCommand
         self.viewModel = viewModel
         let contentView = MainWindow(viewModel: viewModel, apiClient: apiClient)
         NSApp.mainMenu = buildMainMenu()
