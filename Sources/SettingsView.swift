@@ -284,10 +284,11 @@ private struct SpeechTab: View {
             Toggle("Enable speech", isOn: $viewModel.speakEnabled)
                 .toggleStyle(.checkbox)
 
-            // Language picker
+            // Language picker (shows voice count per language)
             Picker("Language", selection: $viewModel.speechLanguage) {
                 ForEach(TTSManager.preferredVoices) { voice in
-                    Text(voice.label).tag(voice.languageCode)
+                    Text("\(voice.label) (\(voiceCountLabel(voice.languageCode)))")
+                        .tag(voice.languageCode)
                 }
             }
             .pickerStyle(.menu)
@@ -345,6 +346,15 @@ private struct SpeechTab: View {
         }
         .font(.caption)
         .onAppear { loadVoices() }
+    }
+
+    private func voiceCountLabel(_ languageCode: String) -> String {
+        let all = AVSpeechSynthesisVoice.speechVoices().filter { $0.language == languageCode }
+        let premium = all.filter { $0.quality.rawValue >= 2 }
+        if !premium.isEmpty {
+            return "\(all.count) voices, \(premium.count) enhanced"
+        }
+        return "\(all.count) voices"
     }
 
     private func loadVoices() {

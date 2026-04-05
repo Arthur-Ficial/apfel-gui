@@ -211,11 +211,18 @@ class GUIAppDelegate: NSObject, NSApplicationDelegate {
         self.serverLaunchCommand = serverLaunchCommand
     }
 
+    var controlServer: GUIControlServer?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         let viewModel = ChatViewModel(apiClient: apiClient)
         viewModel.mcpServerPaths = mcpPaths
         viewModel.serverLaunchCommand = serverLaunchCommand
         self.viewModel = viewModel
+
+        // Start GUI control API for programmatic testing
+        let ctrl = GUIControlServer(viewModel: viewModel)
+        ctrl.start()
+        self.controlServer = ctrl
         let contentView = MainWindow(viewModel: viewModel, apiClient: apiClient)
         NSApp.mainMenu = buildMainMenu()
 

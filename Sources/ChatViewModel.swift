@@ -62,7 +62,7 @@ class ChatViewModel {
     var jsonMode: Bool = false
 
     // Speech settings
-    var speechLanguage: String = "en-GB"
+    var speechLanguage: String = "en-US"
     var selectedVoiceId: String? = nil
     var showSettings: Bool = false
 
