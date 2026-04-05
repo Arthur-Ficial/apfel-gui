@@ -4,3 +4,4 @@
 xcuserdata/
 DerivedData/
 .DS_Store
+Sources/BuildInfo.swift

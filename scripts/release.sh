@@ -4,14 +4,15 @@
 #
 # Usage:
 #   ./scripts/release.sh <version>
-#   ./scripts/release.sh 1.0.0
+#   ./scripts/release.sh 1.1.0
 #
 # What it does:
-#   1. Builds release binary (arm64)
-#   2. Packages binary + MCP server into tarball
-#   3. Creates GitHub release with the tarball
-#   4. Computes sha256 and generates Homebrew formula
-#   5. Pushes formula to Arthur-Ficial/homebrew-tap
+#   1. Sets .version and generates BuildInfo.swift
+#   2. Builds release binary (arm64)
+#   3. Packages binary + MCP server into tarball
+#   4. Creates GitHub release with the tarball
+#   5. Computes sha256 and generates Homebrew formula
+#   6. Pushes formula to Arthur-Ficial/homebrew-tap
 #
 
 set -euo pipefail
@@ -19,7 +20,7 @@ set -euo pipefail
 VERSION="${1:-}"
 if [[ -z "$VERSION" ]]; then
   echo "Usage: $0 <version>"
-  echo "Example: $0 1.0.0"
+  echo "Example: $0 1.1.0"
   exit 1
 fi
 
@@ -32,10 +33,18 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 echo "=== apfel-gui release v${VERSION} ==="
 
-# 1. Build release binary
+# 1. Set version and generate build info
 echo ""
-echo "[1/6] Building release binary..."
+echo "[1/7] Setting version to ${VERSION}..."
 cd "$PROJECT_DIR"
+echo "$VERSION" > .version
+make generate-build-info
+echo "  .version: $(cat .version)"
+echo "  BuildInfo.swift generated"
+
+# 2. Build release binary
+echo ""
+echo "[2/7] Building release binary..."
 swift build -c release
 BINARY_PATH="$PROJECT_DIR/.build/release/$BINARY"
 if [[ ! -f "$BINARY_PATH" ]]; then
@@ -44,9 +53,9 @@ if [[ ! -f "$BINARY_PATH" ]]; then
 fi
 echo "  Built: $BINARY_PATH"
 
-# 2. Package into tarball
+# 3. Package into tarball
 echo ""
-echo "[2/6] Packaging tarball..."
+echo "[3/7] Packaging tarball..."
 STAGING="/tmp/apfel-gui-release-$$"
 mkdir -p "$STAGING/$BINARY-${VERSION}"
 cp "$BINARY_PATH" "$STAGING/$BINARY-${VERSION}/$BINARY"
@@ -58,15 +67,15 @@ cd "$STAGING"
 tar czf "$TARBALL" "$BINARY-${VERSION}"
 echo "  Tarball: $TARBALL"
 
-# 3. Compute sha256
+# 4. Compute sha256
 echo ""
-echo "[3/6] Computing sha256..."
+echo "[4/7] Computing sha256..."
 SHA256=$(shasum -a 256 "$TARBALL" | awk '{print $1}')
 echo "  SHA256: $SHA256"
 
-# 4. Create GitHub release
+# 5. Create GitHub release
 echo ""
-echo "[4/6] Creating GitHub release v${VERSION}..."
+echo "[5/7] Creating GitHub release v${VERSION}..."
 cd "$PROJECT_DIR"
 gh release create "v${VERSION}" "$TARBALL" \
   --repo "$REPO" \
@@ -91,9 +100,9 @@ Requires [apfel](https://github.com/Arthur-Ficial/apfel) v0.8.1+ installed."
 
 echo "  Release created: https://github.com/${REPO}/releases/tag/v${VERSION}"
 
-# 5. Generate Homebrew formula
+# 6. Generate and push Homebrew formula
 echo ""
-echo "[5/6] Generating Homebrew formula..."
+echo "[6/7] Generating Homebrew formula..."
 FORMULA_PATH="$TAP_DIR/Formula/apfel-gui.rb"
 
 cat > "$FORMULA_PATH" <<EOF
@@ -133,9 +142,9 @@ EOF
 
 echo "  Formula written: $FORMULA_PATH"
 
-# 6. Push formula to tap
+# 7. Push formula to tap
 echo ""
-echo "[6/6] Pushing formula to homebrew-tap..."
+echo "[7/7] Pushing formula to homebrew-tap..."
 cd "$TAP_DIR"
 git add "Formula/apfel-gui.rb"
 git commit -m "apfel-gui ${VERSION}"
@@ -144,9 +153,10 @@ git push origin main
 echo ""
 echo "=== Done! ==="
 echo ""
-echo "Users can now install with:"
+echo "Users can now install/upgrade with:"
 echo "  brew tap Arthur-Ficial/tap"
 echo "  brew install apfel-gui"
+echo "  brew upgrade apfel-gui"
 echo ""
 echo "Release: https://github.com/${REPO}/releases/tag/v${VERSION}"
 
