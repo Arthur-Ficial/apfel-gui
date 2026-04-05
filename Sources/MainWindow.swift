@@ -55,6 +55,11 @@ struct MainWindow: View {
                 }
                 .help("Model settings (temperature, max tokens, seed)")
 
+                Button(action: { viewModel.showMCPSettings = true }) {
+                    Label("MCP", systemImage: "wrench.and.screwdriver")
+                }
+                .help("MCP tool server settings")
+
                 Button(action: { viewModel.showContextSettings = true }) {
                     Label("Context", systemImage: "gearshape")
                 }
@@ -82,6 +87,9 @@ struct MainWindow: View {
         }
         .sheet(isPresented: $viewModel.showModelSettings) {
             ModelSettingsView(viewModel: viewModel)
+        }
+        .sheet(isPresented: $viewModel.showMCPSettings) {
+            MCPSettingsView(viewModel: viewModel)
         }
     }
 }
@@ -132,6 +140,16 @@ struct ServerStatusBar: View {
                 }
                 if viewModel.contextStrategy != .newestFirst {
                     badge(viewModel.contextStrategyRaw, color: .cyan)
+                }
+            }
+
+            // MCP tools badge
+            if !viewModel.mcpServerPaths.isEmpty {
+                Divider().frame(height: 12)
+                HStack(spacing: 3) {
+                    Image(systemName: "wrench.and.screwdriver")
+                        .foregroundStyle(.purple)
+                    Text("\(viewModel.mcpServerPaths.count) MCP")
                 }
             }
 

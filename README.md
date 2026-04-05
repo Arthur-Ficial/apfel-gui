@@ -17,7 +17,8 @@ A SwiftUI desktop app that talks to `apfel --serve` via HTTP. Built as a **pro d
 - **Server status bar** — version, context window, model availability, active parameter badges
 - **Model settings** — temperature, max tokens, seed, JSON response mode
 - **Context settings** — 5 trimming strategies (newest-first, oldest-first, sliding-window, summarize, strict)
-- **Tool calling display** — shows tool_calls in messages and debug panel
+- **MCP debugging** — auto-discovers and loads MCP tool servers (bundled debug-tools + apfel's calculator), configurable via MCP settings, full tool call visibility in debug panel and server logs
+- **Tool calling display** — shows tool_calls in messages and debug panel with function names, arguments, finish reasons
 - **Typed error handling** — content policy violations, context overflow, rate limiting with specific recovery guidance
 - **Speech-to-text** and **text-to-speech** (on-device)
 - **Self-discussion mode** — model debates itself with dual perspectives and language support
@@ -72,8 +73,9 @@ apfel-gui
 
 That's it. The GUI will:
 1. Find `apfel` in your PATH
-2. Start `apfel --serve --port 11434 --cors --debug` in the background
-3. Fetch server info from `/health` and `/v1/models`
+2. Auto-discover MCP servers (bundled debug-tools + apfel's calculator if found)
+3. Start `apfel --serve --port 11434 --cors --debug --mcp <servers>` in the background
+4. Fetch server info from `/health` and `/v1/models`
 4. Open the SwiftUI window
 
 Quitting the app automatically stops the server.
@@ -101,6 +103,22 @@ The debug inspector is the heart of apfel-gui. Select any message to see:
 - **Response JSON** — raw SSE events, exactly as received
 - **Tool calls** — function name and arguments for each tool call
 - **Error type** — structured error classification with recovery guidance
+
+## MCP Tool Debugging
+
+apfel-gui launches `apfel --serve` with `--mcp` flags, enabling MCP tool servers automatically. apfel handles all MCP logic (tool injection, tool call detection) — the GUI is a thin debugging layer that shows exactly what happens.
+
+**Default servers (auto-discovered):**
+- **debug-tools** (bundled) — `echo`, `timestamp`, `system_info` tools for testing
+- **calculator** (from apfel) — `add`, `subtract`, `multiply`, `divide`, `sqrt`, `power`, `round_number`
+
+**What you see in the debug panel:**
+- Tool calls with function names and arguments
+- `finish_reason: "tool_calls"` indicator
+- Server-side events showing `"tool_calls detected: multiply, echo"`
+- Full SSE stream with tool call chunks
+
+**Adding custom MCP servers:** Open MCP settings (toolbar) → Add path to any MCP server script (.py) or executable → Restart apfel-gui.
 
 ## API Compatibility
 

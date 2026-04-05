@@ -1,6 +1,6 @@
 // ============================================================================
 // GUIApp.swift — Launch native macOS SwiftUI GUI for apfel
-// Spawns apfel --serve as background process, opens SwiftUI window.
+// Spawns apfel --serve with --mcp flags, opens SwiftUI window.
 // ============================================================================
 
 import AppKit
@@ -9,7 +9,6 @@ import SwiftUI
 /// Start the GUI: launch server in background, open SwiftUI chat window.
 @MainActor
 func startGUI() {
-    // Pick a port for the background server
     let port = 11434
 
     // Find apfel in PATH or fall back to /usr/local/bin/apfel
@@ -25,25 +24,37 @@ func startGUI() {
         return
     }
 
+    // Discover MCP servers
+    let mcpPaths = discoverMCPServers(apfelBinaryPath: apfelPath)
+
+    var arguments = ["--serve", "--port", "\(port)", "--cors", "--debug"]
+    for path in mcpPaths {
+        arguments.append(contentsOf: ["--mcp", path])
+    }
+
     let serverProcess = Process()
     serverProcess.executableURL = URL(fileURLWithPath: apfelPath)
-    serverProcess.arguments = ["--serve", "--port", "\(port)", "--cors", "--debug"]
+    serverProcess.arguments = arguments
     serverProcess.standardOutput = FileHandle.nullDevice
     serverProcess.standardError = FileHandle.nullDevice
 
     do {
         try serverProcess.run()
         printStderr("GUI: server started on port \(port) (PID: \(serverProcess.processIdentifier))")
+        if !mcpPaths.isEmpty {
+            printStderr("GUI: MCP servers: \(mcpPaths.joined(separator: ", "))")
+        }
     } catch {
         printStderr("GUI: failed to start server: \(error)")
         return
     }
 
-    // Wait for server to be ready
+    // Wait for server to be ready (longer timeout when MCP servers are loading)
     let client = APIClient(port: port)
-    let ready = waitForServer(client: client, timeout: 8.0)
+    let timeout = mcpPaths.isEmpty ? 8.0 : 12.0
+    let ready = waitForServer(client: client, timeout: timeout)
     guard ready else {
-        printStderr("GUI: server failed to start within 8 seconds")
+        printStderr("GUI: server failed to start within \(Int(timeout)) seconds")
         serverProcess.terminate()
         return
     }
@@ -55,10 +66,100 @@ func startGUI() {
 
     let delegate = GUIAppDelegate(
         serverProcess: serverProcess,
-        apiClient: client
+        apiClient: client,
+        mcpPaths: mcpPaths
     )
     app.delegate = delegate
     app.run()
+}
+
+// MARK: - MCP Server Discovery
+
+/// Find MCP servers to enable by default.
+/// Returns paths to .py scripts or executables that exist.
+private func discoverMCPServers(apfelBinaryPath: String) -> [String] {
+    let fm = FileManager.default
+    var paths: [String] = []
+
+    // 1. Bundled debug-tools server (shipped with apfel-gui)
+    let bundledCandidates = bundledMCPServerCandidates()
+    if let debugTools = bundledCandidates.first(where: { fm.isReadableFile(atPath: $0) }) {
+        paths.append(debugTools)
+        printStderr("GUI: found bundled MCP server: \(debugTools)")
+    }
+
+    // 2. apfel's calculator MCP server (from apfel source repo)
+    let calcCandidates = calculatorMCPServerCandidates(apfelBinaryPath: apfelBinaryPath)
+    if let calculator = calcCandidates.first(where: { fm.isReadableFile(atPath: $0) }) {
+        paths.append(calculator)
+        printStderr("GUI: found calculator MCP server: \(calculator)")
+    }
+
+    // 3. User-configured MCP servers (from UserDefaults)
+    if let userPaths = UserDefaults.standard.stringArray(forKey: "mcpServerPaths") {
+        for path in userPaths {
+            if fm.isReadableFile(atPath: path) {
+                paths.append(path)
+                printStderr("GUI: found user MCP server: \(path)")
+            } else {
+                printStderr("GUI: user MCP server not found: \(path)")
+            }
+        }
+    }
+
+    return paths
+}
+
+/// Candidate paths for the bundled debug-tools MCP server.
+private func bundledMCPServerCandidates() -> [String] {
+    var candidates: [String] = []
+
+    // Relative to the executable (for swift run / dev builds)
+    let execPath = CommandLine.arguments[0]
+    let execDir = URL(fileURLWithPath: execPath).deletingLastPathComponent().path
+
+    // Walk up from .build/debug/apfel-gui to repo root
+    let repoRoot = URL(fileURLWithPath: execDir)
+        .deletingLastPathComponent() // .build/debug -> .build
+        .deletingLastPathComponent() // .build -> repo root
+        .deletingLastPathComponent() // one more level for release builds
+    candidates.append(repoRoot.appendingPathComponent("mcp/debug-tools/server.py").path)
+
+    // Also check from the repo root directly (2 levels up)
+    let repoRoot2 = URL(fileURLWithPath: execDir)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    candidates.append(repoRoot2.appendingPathComponent("mcp/debug-tools/server.py").path)
+
+    // Current working directory (for running from repo root)
+    candidates.append(FileManager.default.currentDirectoryPath + "/mcp/debug-tools/server.py")
+
+    // Installed location
+    candidates.append("/usr/local/share/apfel-gui/mcp/debug-tools/server.py")
+
+    return candidates
+}
+
+/// Candidate paths for apfel's calculator MCP server.
+private func calculatorMCPServerCandidates(apfelBinaryPath: String) -> [String] {
+    var candidates: [String] = []
+    let home = FileManager.default.homeDirectoryForCurrentUser.path
+
+    // Relative to the apfel binary (Homebrew or dev)
+    let apfelDir = URL(fileURLWithPath: apfelBinaryPath).deletingLastPathComponent()
+    candidates.append(apfelDir.deletingLastPathComponent().appendingPathComponent("mcp/calculator/server.py").path)
+
+    // Common dev paths
+    candidates.append("\(home)/dev/apfel/mcp/calculator/server.py")
+    candidates.append("\(home)/Developer/apfel/mcp/calculator/server.py")
+    candidates.append("\(home)/src/apfel/mcp/calculator/server.py")
+    candidates.append("\(home)/projects/apfel/mcp/calculator/server.py")
+
+    // Homebrew share path
+    candidates.append("/opt/homebrew/share/apfel/mcp/calculator/server.py")
+    candidates.append("/usr/local/share/apfel/mcp/calculator/server.py")
+
+    return candidates
 }
 
 /// Poll /health until server responds or timeout.
@@ -89,16 +190,19 @@ private func waitForServer(client: APIClient, timeout: Double) -> Bool {
 class GUIAppDelegate: NSObject, NSApplicationDelegate {
     let serverProcess: Process
     let apiClient: APIClient
+    let mcpPaths: [String]
     var window: NSWindow?
     var viewModel: ChatViewModel?
 
-    init(serverProcess: Process, apiClient: APIClient) {
+    init(serverProcess: Process, apiClient: APIClient, mcpPaths: [String]) {
         self.serverProcess = serverProcess
         self.apiClient = apiClient
+        self.mcpPaths = mcpPaths
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let viewModel = ChatViewModel(apiClient: apiClient)
+        viewModel.mcpServerPaths = mcpPaths
         self.viewModel = viewModel
         let contentView = MainWindow(viewModel: viewModel, apiClient: apiClient)
         NSApp.mainMenu = buildMainMenu()
@@ -123,7 +227,6 @@ class GUIAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Clean shutdown: kill the server process
         if serverProcess.isRunning {
             serverProcess.terminate()
             printStderr("GUI: server process terminated")

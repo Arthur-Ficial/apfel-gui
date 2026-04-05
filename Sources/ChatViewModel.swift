@@ -48,6 +48,8 @@ class ChatViewModel {
     var showSelfDiscussion: Bool = false
     var showContextSettings: Bool = false
     var showModelSettings: Bool = false
+    var showMCPSettings: Bool = false
+    var mcpServerPaths: [String] = []
     var contextStrategyRaw: String = ContextStrategy.newestFirst.rawValue
     var contextMaxTurns: Int? = nil
     var contextOutputReserve: Int = 512

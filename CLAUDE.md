@@ -18,7 +18,7 @@ Requires `apfel` installed and in PATH.
 
 ```
 main.swift → startGUI()
-  └─ GUIApp.swift: spawns `apfel --serve --debug`, waits for health check
+  └─ GUIApp.swift: discovers MCP servers, spawns `apfel --serve --debug --mcp ...`
       └─ GUIAppDelegate → MainWindow (SwiftUI)
           ├─ ServerStatusBar (version, context window, active params)
           ├─ ChatView + ChatViewModel ←→ APIClient (HTTP)
@@ -36,7 +36,7 @@ main.swift → startGUI()
 | File | Purpose |
 |------|---------|
 | `Sources/main.swift` | Entry point |
-| `Sources/GUIApp.swift` | Server lifecycle, NSApplication setup |
+| `Sources/GUIApp.swift` | Server lifecycle, MCP discovery, NSApplication setup |
 | `Sources/APIClient.swift` | HTTP client for /v1 endpoints, /health, /v1/models |
 | `Sources/ChatViewModel.swift` | Observable state for chat UI, model settings, server info |
 | `Sources/ChatView.swift` | Main chat interface with typed error display |
@@ -45,6 +45,7 @@ main.swift → startGUI()
 | `Sources/MainWindow.swift` | Three-panel layout + server status bar |
 | `Sources/MessageBubble.swift` | Chat message with tool calls and error badges |
 | `Sources/ModelSettingsView.swift` | Temperature, max_tokens, seed, JSON mode, connection settings |
+| `Sources/MCPSettingsView.swift` | MCP tool server configuration |
 | `Sources/ContextSettingsView.swift` | Context strategy picker |
 | `Sources/ContextStrategy.swift` | Duplicated enum from ApfelCore |
 | `Sources/SelfDiscussionView.swift` | Self-discussion configuration |
@@ -61,6 +62,14 @@ main.swift → startGUI()
 | `/v1/chat/completions` | POST | Chat (streaming SSE + non-streaming), with temperature, max_tokens, seed, response_format |
 | `/v1/logs` | GET | Request log with events (requires --debug) |
 | `/v1/logs/stats` | GET | Aggregate stats (uptime, requests, errors, tokens, active) |
+
+## MCP Support
+
+- GUI auto-discovers MCP servers: bundled `mcp/debug-tools/server.py` + apfel's `mcp/calculator/server.py`
+- Passes `--mcp <path>` flags when launching apfel — apfel handles all MCP logic
+- GUI is a thin layer: shows tool calls, finish reasons, and server events in debug panel
+- MCP settings allow adding custom server paths (saved to UserDefaults)
+- `make install` copies bundled MCP server to `/usr/local/share/apfel-gui/mcp/debug-tools/`
 
 ## Notes
 
