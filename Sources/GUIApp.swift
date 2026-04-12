@@ -144,7 +144,8 @@ private func bundledMCPServerCandidates() -> [String] {
     // Current working directory (for running from repo root)
     candidates.append(FileManager.default.currentDirectoryPath + "/mcp/debug-tools/server.py")
 
-    // Installed location
+    // Installed locations
+    candidates.append("/opt/homebrew/share/apfel-gui/mcp/debug-tools/server.py")
     candidates.append("/usr/local/share/apfel-gui/mcp/debug-tools/server.py")
 
     return candidates
