@@ -12,13 +12,19 @@ brew install apfel-gui          # installs apfel-gui + apfel
 apfel-gui                       # run
 ```
 
-## Build from source
+## Build & Install
 
 ```bash
-swift build -c release          # build
-make install                    # build + install to /usr/local/bin + MCP server
+make build                      # build release (NO version bump)
+make install                    # build + install to /usr/local/bin + MCP server (NO version bump)
+make version                    # print current version
+swift build                     # debug build
 swift run apfel-gui             # run debug build
 ```
+
+`make install` auto-unlinks Homebrew apfel-gui so the dev binary takes PATH priority. `make uninstall` restores the Homebrew link.
+
+**Version is in `.version` file** (single source of truth). Local builds (`make build`, `make install`) do NOT change the version. Only the release workflow bumps versions. Never manually edit `.version` or `Sources/BuildInfo.swift`.
 
 ## Release
 
