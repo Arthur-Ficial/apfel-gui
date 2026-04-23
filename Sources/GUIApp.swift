@@ -35,15 +35,22 @@ func startGUI(enableAPI: Bool = false) {
         arguments.append(contentsOf: ["--mcp", path])
     }
 
+    let logPath = openServerLog()
     let serverProcess = Process()
     serverProcess.executableURL = URL(fileURLWithPath: apfelPath)
     serverProcess.arguments = arguments
-    serverProcess.standardOutput = FileHandle.nullDevice
-    serverProcess.standardError = FileHandle.nullDevice
+    if let handle = logPath.flatMap({ FileHandle(forWritingAtPath: $0) }) {
+        serverProcess.standardOutput = handle
+        serverProcess.standardError = handle
+    } else {
+        serverProcess.standardOutput = FileHandle.nullDevice
+        serverProcess.standardError = FileHandle.nullDevice
+    }
 
     do {
         try serverProcess.run()
         printStderr("GUI: server started on port \(port) (PID: \(serverProcess.processIdentifier))")
+        if let logPath { printStderr("GUI: server logs: \(logPath)") }
         if !mcpPaths.isEmpty {
             printStderr("GUI: MCP servers: \(mcpPaths.joined(separator: ", "))")
         }
@@ -58,6 +65,9 @@ func startGUI(enableAPI: Bool = false) {
     let ready = waitForServer(client: client, timeout: timeout)
     guard ready else {
         printStderr("GUI: server failed to start within \(Int(timeout)) seconds")
+        if let logPath {
+            printStderr("GUI: subprocess logs: \(logPath)")
+        }
         serverProcess.terminate()
         return
     }
@@ -171,6 +181,25 @@ private func calculatorMCPServerCandidates(apfelBinaryPath: String) -> [String] 
     candidates.append("/usr/local/share/apfel/mcp/calculator/server.py")
 
     return candidates
+}
+
+/// Create the apfel-gui log directory and an empty log file for this launch.
+/// Returns the absolute path of the log file, or nil if the directory could not be created.
+private func openServerLog() -> String? {
+    let fm = FileManager.default
+    let dir = fm.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Logs/apfel-gui", isDirectory: true)
+    do {
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+    } catch {
+        printStderr("GUI: could not create log directory \(dir.path): \(error)")
+        return nil
+    }
+    let stamp = ISO8601DateFormatter().string(from: Date())
+        .replacingOccurrences(of: ":", with: "-")
+    let file = dir.appendingPathComponent("server-\(stamp).log")
+    fm.createFile(atPath: file.path, contents: Data(), attributes: nil)
+    return file.path
 }
 
 /// Poll /health until server responds or timeout.
