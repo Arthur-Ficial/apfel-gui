@@ -153,17 +153,20 @@ struct ChatView: View {
                 .help(viewModel.stt.isListening ? "Stop listening" : "Start voice input")
                 .onHover { h in if h { NSCursor.pointingHand.push() } else { NSCursor.pop() } }
 
-                // Text input
-                TextField(viewModel.stt.isListening ? "Listening..." : "Type a message, press Enter to send...", text: $viewModel.currentInput)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.body)
-                    .focused($focusedField, equals: .messageInput)
-                    .onSubmit {
+                // Text input — multi-line. Return sends, Shift/Option+Return inserts a newline.
+                MultilineInputField(
+                    text: $viewModel.currentInput,
+                    placeholder: viewModel.stt.isListening
+                        ? "Listening..."
+                        : "Type a message · Return to send · Shift+Return for newline",
+                    onSubmit: {
                         Task { await viewModel.send() }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             focusedField = .messageInput
                         }
                     }
+                )
+                .focused($focusedField, equals: .messageInput)
 
                 // Send button
                 Button(action: {
