@@ -11,7 +11,7 @@ let apfelGUIPort = 11438
 
 /// Start the GUI: launch server in background, open SwiftUI chat window.
 @MainActor
-func startGUI(enableAPI: Bool = false) {
+func startGUI(enableAPI: Bool = false, safeMode: Bool = false) {
     let port = apfelGUIPort
 
     // Find apfel in PATH or fall back to /usr/local/bin/apfel
@@ -27,8 +27,12 @@ func startGUI(enableAPI: Bool = false) {
         return
     }
 
-    // Discover MCP servers
-    let mcpPaths = discoverMCPServers(apfelBinaryPath: apfelPath)
+    if safeMode {
+        printStderr("GUI: safe-mode: skipping user-configured MCP servers for this session")
+    }
+
+    // Discover MCP servers (safe mode bypasses user-configured paths)
+    let mcpPaths = discoverMCPServers(apfelBinaryPath: apfelPath, includeUserPaths: !safeMode)
 
     var arguments = ["--serve", "--port", "\(port)", "--cors", "--debug"]
     for path in mcpPaths {
@@ -97,7 +101,11 @@ func startGUI(enableAPI: Bool = false) {
 
 /// Find MCP servers to enable by default.
 /// Returns paths to .py scripts or executables that exist.
-private func discoverMCPServers(apfelBinaryPath: String) -> [String] {
+///
+/// - Parameter includeUserPaths: When false, user-configured paths from
+///   `UserDefaults` are skipped. Used by `--safe-mode` so a single bad path
+///   cannot block the GUI from launching.
+private func discoverMCPServers(apfelBinaryPath: String, includeUserPaths: Bool = true) -> [String] {
     let fm = FileManager.default
     var paths: [String] = []
 
@@ -116,7 +124,7 @@ private func discoverMCPServers(apfelBinaryPath: String) -> [String] {
     }
 
     // 3. User-configured MCP servers (from UserDefaults)
-    if let userPaths = UserDefaults.standard.stringArray(forKey: "mcpServerPaths") {
+    if includeUserPaths, let userPaths = UserDefaults.standard.stringArray(forKey: "mcpServerPaths") {
         for path in userPaths {
             if fm.isReadableFile(atPath: path) {
                 paths.append(path)

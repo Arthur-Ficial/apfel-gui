@@ -93,6 +93,28 @@ Custom MCP servers can be added via the MCP settings in the toolbar.
 | Cmd+J | Open self-discussion |
 | Enter | Send message |
 
+## Troubleshooting MCP servers
+
+A malformed user-configured MCP path can prevent `apfel --serve` from
+becoming ready, which leaves the GUI window unable to load. Since the
+Settings panel lives behind the GUI, you cannot edit the path from there
+when the app fails to start.
+
+Two CLI escape hatches handle this without touching the plist by hand:
+
+```bash
+apfel-gui --list-mcp-servers       # show the configured paths
+apfel-gui --reset-mcp-servers      # clear all user MCP paths, then relaunch
+apfel-gui --safe-mode              # one-shot launch that ignores user paths
+```
+
+If you prefer raw `defaults`, the same key:
+
+```bash
+defaults read com.arthurficial.apfel-gui mcpServerPaths
+defaults delete com.arthurficial.apfel-gui mcpServerPaths
+```
+
 ## Build from source
 
 ```bash
