@@ -1,5 +1,9 @@
 # apfel-gui - Project Instructions
 
+## The Golden Goal
+
+apfel-gui is the native macOS debug GUI for [apfel](https://github.com/Arthur-Ficial/apfel) - a SwiftUI desktop app that talks to `apfel --serve` over HTTP and shows everything: raw requests/responses, full MCP JSON-RPC protocol data, server event traces, token budgets, and SSE streams, with nothing hidden. It IS a pure HTTP consumer of apfel's OpenAI-compatible API, a developer's inspector for understanding and debugging what apfel does. It is NOT a model: it contains no inference logic and no FoundationModels dependency, and apfel owns all model and MCP behaviour. It is also NOT a polished consumer chat app - the chat surface exists to drive the debugger, so we do not chase end-user features that belong in a separate product. Every decision is scored against one question: does this make apfel's behaviour easier to see and debug.
+
 ## Purpose
 
 Native macOS SwiftUI debug GUI for [apfel](https://github.com/Arthur-Ficial/apfel). Pure HTTP consumer - no model logic, no FoundationModels dependency. Works with apfel v0.8.1+.
